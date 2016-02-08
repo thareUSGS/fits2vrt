@@ -78,6 +78,36 @@ class fitskeys(object):
                 metadata[key] = str(header[key])
         dst_ds.SetMetadata( metadata )
 
+        # Defining projection type
+        wcsproj = (self.__header['CTYPE1'])[-3:]
+        if ( wcsproj == 'SFL' ):
+            print wcsproj
+            #dst_ds.SetSinusoidal (double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'ZEA' ):
+            print wcsproj
+            #dst_ds.SetLAEA (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'COO' ):
+            print wcsproj
+            #dst_ds.SetLCC (double dfStdP1, double dfStdP2, double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'CAR' ):
+            print wcsproj
+            #dst_ds.SetEquirectangular (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'MER' ):
+            print wcsproj
+            #dst_ds.SetTM (double dfCenterLat, double dfCenterLong, double dfScale, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'SIN' ):
+            print wcsproj
+            #dst_ds.SetOrthographic (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+        elif ( wcsproj == 'AZP' ):
+            print wcsproj
+            #dst_ds.zenithalperspective point perspective?
+        elif ( wcsproj == 'STG' ):
+            print wcsproj
+            #dst_ds.SetStereographic (double dfCenterLat, double dfCenterLong, double dfScale, double dfFalseEasting, double dfFalseNorthing)
+        else:
+            print "Unknown projection"
+            print wcsproj
+
         # Top Left pixel is bottom left in FITS
         #topleftx = 
         #toplefty = 
