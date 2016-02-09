@@ -79,31 +79,27 @@ class fitskeys(object):
         dst_ds.SetMetadata( metadata )
 
         # Defining projection type
+        #dst_ds.SetProjParm(false_northing,0.0)
+        #dst_ds.SetProjParm(false_easting,0.0)
         wcsproj = (self.__header['CTYPE1'])[-3:]
         if ( wcsproj == 'SFL' ):
-            print wcsproj
-            #dst_ds.SetSinusoidal (double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+            #dfCenterLong = self.__header['CRVAL1']
+            dst_ds.SetProjection("Sinusoidal")
+            #dst_ds.SetProjParm(longitude_of_center,dfCenterLong)
         elif ( wcsproj == 'ZEA' ):
-            print wcsproj
-            #dst_ds.SetLAEA (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+            dst_ds.SetProjection("Lambert_Azimuthal_Equal_Area")
         elif ( wcsproj == 'COO' ):
-            print wcsproj
-            #dst_ds.SetLCC (double dfStdP1, double dfStdP2, double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+            dst.SetProjection("Lambert_Conformal_Conic_1SP")
         elif ( wcsproj == 'CAR' ):
-            print wcsproj
-            #dst_ds.SetEquirectangular (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+            dst.SetProjection("Equirectangular")
         elif ( wcsproj == 'MER' ):
-            print wcsproj
-            #dst_ds.SetTM (double dfCenterLat, double dfCenterLong, double dfScale, double dfFalseEasting, double dfFalseNorthing)
+            dst.SetProjection("Transverse_Mercator")
         elif ( wcsproj == 'SIN' ):
-            print wcsproj
-            #dst_ds.SetOrthographic (double dfCenterLat, double dfCenterLong, double dfFalseEasting, double dfFalseNorthing)
+            dst.SetProjection("Orthographic")
         elif ( wcsproj == 'AZP' ):
-            print wcsproj
-            #dst_ds.zenithalperspective point perspective?
+            dst.SetProjection("perspective_point_height")
         elif ( wcsproj == 'STG' ):
-            print wcsproj
-            #dst_ds.SetStereographic (double dfCenterLat, double dfCenterLong, double dfScale, double dfFalseEasting, double dfFalseNorthing)
+            dst.SetProjection("Stereographic")
         else:
             print "Unknown projection"
             print wcsproj
