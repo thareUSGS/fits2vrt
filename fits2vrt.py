@@ -44,6 +44,8 @@ class fitskeys(object):
             dimz = 1
 
         # Defining dataset bit type
+        # Following http://www.gdal.org/gdal_8h.html#a22e22ce0a55036a96f652765793fb7a4 (GDAL)
+        # and https://heasarc.gsfc.nasa.gov/docs/software/fitsio/c/c_user/node20.html (FITS)
         fbittype = self.__header['BITPIX']
         if (fbittype == 8):
             gbittype = gdal.GDT_Byte
@@ -68,9 +70,10 @@ class fitskeys(object):
         dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, dimz, gbittype )
 
         # Setting all non mandatory FITS keywords as metadata
+        # COMMENT and HISTORY keywords are excluded too
         metadata = {}
         header = self.__header
-        nometadata = ['SIMPLE','EXTEND','BITPIX','BZERO','BSCALE','COMMENT','NAXIS']
+        nometadata = ['SIMPLE','EXTEND','BITPIX','BZERO','BSCALE','COMMENT','NAXIS','HISTORY']
         for i in range(1, header['NAXIS']+1):
             nometadata.append('NAXIS'+str(i))
         for key in header.keys():
@@ -79,13 +82,19 @@ class fitskeys(object):
         dst_ds.SetMetadata( metadata )
 
         # Defining projection type
-        #dst_ds.SetProjParm(false_northing,0.0)
-        #dst_ds.SetProjParm(false_easting,0.0)
+        # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
+        # and http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1077CFUL (FITS)
+        fe = 0.0
+        fn = 0.0
+        srs=osr.SpatialReference()
         wcsproj = (self.__header['CTYPE1'])[-3:]
+        # Sinusoidal / SFL projection
         if ( wcsproj == 'SFL' ):
-            #dfCenterLong = self.__header['CRVAL1']
-            dst_ds.SetProjection("Sinusoidal")
-            #dst_ds.SetProjParm(longitude_of_center,dfCenterLong)
+            clong = self.__header['CRVAL1']
+            srs.SetProjection('Sinusoidal')
+            srs.SetProjParm('longitude_of_center',clong)
+            srs.SetProjParm('false_easting',fe)
+            srs.SetProjParm('false_northing',fn)
         elif ( wcsproj == 'ZEA' ):
             dst_ds.SetProjection("Lambert_Azimuthal_Equal_Area")
         elif ( wcsproj == 'COO' ):
@@ -103,14 +112,13 @@ class fitskeys(object):
         else:
             print "Unknown projection"
             print wcsproj
+        wkt = srs.ExportToWkt()
+        dst_ds.SetProjection(wkt)
 
         # Top Left pixel is bottom left in FITS
         #topleftx = 
         #toplefty = 
         #dst_ds.SetGeoTransform( [ topleftx, wepixres, rotation, toplefty, rotation, nspixres] )
-        #srs = osr.SpatialReference()
-        #srs.SetWellKnownGeogCS( '' )
-        #dst_ds.SetProjection( srs.ExportToWkt() )
 
         # Close properly the dataset
         dst_ds = None
