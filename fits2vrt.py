@@ -98,17 +98,17 @@ class fitskeys(object):
         elif ( wcsproj == 'ZEA' ):
             dst_ds.SetProjection("Lambert_Azimuthal_Equal_Area")
         elif ( wcsproj == 'COO' ):
-            dst.SetProjection("Lambert_Conformal_Conic_1SP")
+            dst_ds.SetProjection("Lambert_Conformal_Conic_1SP")
         elif ( wcsproj == 'CAR' ):
-            dst.SetProjection("Equirectangular")
+            dst_ds.SetProjection("Equirectangular")
         elif ( wcsproj == 'MER' ):
-            dst.SetProjection("Transverse_Mercator")
+            dst_ds.SetProjection("Transverse_Mercator")
         elif ( wcsproj == 'SIN' ):
-            dst.SetProjection("Orthographic")
+            dst_ds.SetProjection("Orthographic")
         elif ( wcsproj == 'AZP' ):
-            dst.SetProjection("perspective_point_height")
+            dst_ds.SetProjection("perspective_point_height")
         elif ( wcsproj == 'STG' ):
-            dst.SetProjection("Stereographic")
+            dst_ds.SetProjection("Stereographic")
         else:
             print "Unknown projection"
             print wcsproj
