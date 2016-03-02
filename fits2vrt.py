@@ -1,13 +1,14 @@
 """
 This file is part of fits2vrt
 A FITS to GDAL Virtual Header conversion tool
-20/01/2016
+02/03/2016
 Author : Chiara Marmo (chiara.marmo@u-psud.fr)
 Copyright : CNRS, Universite Paris-Sud
 """
 
 import os
 import os.path
+import re
 import astropy
 from astropy.io import fits
 from astropy import wcs
@@ -28,6 +29,18 @@ class fitskeys(object):
             self.__header = hdulist[0].header
             hdulist.close()
             self.__wcs = wcs.WCS(self.__header)
+
+            # alternate linear WCS
+            ctype1 = re.compile("CTYPE1")
+            px = re.compile("PX-")
+            for key in self.__header.keys():
+                alt = re.search(ctype1,key)
+                if re.search(ctype1,key):
+                    ctype = str(self.__header[key])
+                    if re.search(px,ctype):
+                        altkey = key[alt.end(0):]
+                        self.__altkey = altkey
+
 
     # FITS metadata conversion to GDAL VRT Header
     def fits2vrt(self):
@@ -81,6 +94,25 @@ class fitskeys(object):
                 metadata[key] = str(header[key])
         dst_ds.SetMetadata( metadata )
 
+        # Defining Geotransform: if linear WCS is defined 
+        # GeoTransform[1] = CD1_1
+        # GeoTransform[2] = CD1_2
+        # GeoTransform[4] = CD2_1
+        # GeoTransform[5] = CD2_2
+        # GeoTransform[0] and GeoTransform[3] must be computed.
+        if self.__altkey:
+            altkey = self.__altkey
+            geot1 = header['CD1_1'+altkey]
+            geot2 = header['CD1_2'+altkey]
+            geot4 = header['CD2_1'+altkey]
+            geot5 = header['CD2_2'+altkey]
+
+            # Top Left pixel is startx endy in FITS
+            #leftx, lefty = self.__wcs.wcs_pix2world(1., dimy, 1)
+            topleftx = header['CRVAL1'+altkey] + geot1 * (1-header['CRPIX1'+altkey])
+            toplefty = header['CRVAL2'+altkey] + geot5 * (-dimy-header['CRPIX2'+altkey])
+            dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
+
         # Defining projection type
         # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
         # and http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1077CFUL (FITS)
@@ -114,11 +146,6 @@ class fitskeys(object):
             print wcsproj
         wkt = srs.ExportToWkt()
         dst_ds.SetProjection(wkt)
-
-        # Top Left pixel is bottom left in FITS
-        #topleftx = 
-        #toplefty = 
-        #dst_ds.SetGeoTransform( [ topleftx, wepixres, rotation, toplefty, rotation, nspixres] )
 
         # Close properly the dataset
         dst_ds = None
