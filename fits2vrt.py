@@ -94,6 +94,9 @@ class fitskeys(object):
                 metadata[key] = str(header[key])
         dst_ds.SetMetadata( metadata )
 
+        # Defining Target object
+        target = header['OBJECT'] 
+
         # Defining Geotransform: if linear WCS is defined 
         # GeoTransform[1] = CD1_1
         # GeoTransform[2] = CD1_2
@@ -109,8 +112,8 @@ class fitskeys(object):
 
             # Top Left pixel is startx endy in FITS
             #leftx, lefty = self.__wcs.wcs_pix2world(1., dimy, 1)
-            topleftx = header['CRVAL1'+altkey] + geot1 * (1-header['CRPIX1'+altkey])
-            toplefty = header['CRVAL2'+altkey] + geot5 * (-dimy-header['CRPIX2'+altkey])
+            topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
+            toplefty = header['CRVAL2'+altkey] + geot5 * (0.5+dimy - header['CRPIX2'+altkey]) + geot4 * (0.5+dimy - header['CRPIX1'+altkey])
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
 
         # Defining projection type
@@ -119,31 +122,36 @@ class fitskeys(object):
         fe = 0.0
         fn = 0.0
         srs=osr.SpatialReference()
+        srs.SetProjParm('PrimeMeridian',0)
         wcsproj = (self.__header['CTYPE1'])[-3:]
         # Sinusoidal / SFL projection
         if ( wcsproj == 'SFL' ):
+            gdalproj = 'Sinusoidal'
             clong = self.__header['CRVAL1']
-            srs.SetProjection('Sinusoidal')
-            srs.SetProjParm('longitude_of_center',clong)
-            srs.SetProjParm('false_easting',fe)
-            srs.SetProjParm('false_northing',fn)
         elif ( wcsproj == 'ZEA' ):
-            dst_ds.SetProjection("Lambert_Azimuthal_Equal_Area")
+            gdalproj = 'Lambert_Azimuthal_Equal_Area'
         elif ( wcsproj == 'COO' ):
-            dst_ds.SetProjection("Lambert_Conformal_Conic_1SP")
+            gdalproj = 'Lambert_Conformal_Conic_1SP'
         elif ( wcsproj == 'CAR' ):
-            dst_ds.SetProjection("Equirectangular")
+            gdalproj = 'Equirectangular'
         elif ( wcsproj == 'MER' ):
-            dst_ds.SetProjection("Transverse_Mercator")
+            gdalproj = 'Transverse_Mercator'
         elif ( wcsproj == 'SIN' ):
-            dst_ds.SetProjection("Orthographic")
+            gdalproj = 'Orthographic'
         elif ( wcsproj == 'AZP' ):
-            dst_ds.SetProjection("perspective_point_height")
+            gdalproj = 'perspective_point_height'
         elif ( wcsproj == 'STG' ):
-            dst_ds.SetProjection("Stereographic")
+            gdalproj = 'Stereographic'
         else:
             print "Unknown projection"
             print wcsproj
+
+        projname = gdalproj + ' ' + target
+        srs.SetProjection(gdalproj)
+        srs.SetProjParm('longitude_of_center',clong)
+        srs.SetProjParm('false_easting',fe)
+        srs.SetProjParm('false_northing',fn)
+
         wkt = srs.ExportToWkt()
         dst_ds.SetProjection(wkt)
 
