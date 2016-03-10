@@ -44,8 +44,8 @@ class fitskeys(object):
 
     # FITS metadata conversion to GDAL VRT Header
     def fits2vrt(self):
-        format = "vrt"
-        driver = gdal.GetDriverByName( format )
+        src_ds = gdal.Open(self.__name)
+        driver = gdal.GetDriverByName('vrt')
         vrtname, fitsext = os.path.splitext(self.__name)
 
         # Defining dataset dimensions
@@ -56,21 +56,28 @@ class fitskeys(object):
         else:
             dimz = 1
 
+        # Defining Scale and Offset
+        #bzero = self.__header['BZERO']
+        #bscale = self.__header['BSCALE']
+        bzero = 0.0
+        bscale = 1.0
+
         # Defining dataset bit type
         # Following http://www.gdal.org/gdal_8h.html#a22e22ce0a55036a96f652765793fb7a4 (GDAL)
         # and https://heasarc.gsfc.nasa.gov/docs/software/fitsio/c/c_user/node20.html (FITS)
         fbittype = self.__header['BITPIX']
         if (fbittype == 8):
             gbittype = gdal.GDT_Byte
+            nodata = 0
         elif (fbittype == 16):
-            if (BZERO <= 0):
+            if (bzero <= 0):
               gbittype = gdal.GDT_Int16
-            elif (BZERO > 0):
+            elif (bzero > 0):
               gbittype = gdal.GDT_UInt16
         elif (fbittype == 32):
-            if (BZERO <= 0):
+            if (bzero <= 0):
               gbittype = gdal.GDT_Int32
-            elif (BZERO > 0):
+            elif (bzero > 0):
               gbittype = gdal.GDT_UInt32
         elif (fbittype == -32):
             gbittype = gdal.GDT_Float32
@@ -80,7 +87,8 @@ class fitskeys(object):
             print "Bit Type not supported"
             print fbittype
 
-        dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, dimz, gbittype )
+        #dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, dimz, gbittype )
+        dst_ds = driver.CreateCopy( vrtname + '.vrt', src_ds, 0)
 
         # Setting all non mandatory FITS keywords as metadata
         # COMMENT and HISTORY keywords are excluded too
@@ -111,9 +119,12 @@ class fitskeys(object):
             geot5 = header['CD2_2'+altkey]
 
             # Top Left pixel is startx endy in FITS
-            #leftx, lefty = self.__wcs.wcs_pix2world(1., dimy, 1)
+            # leftx, lefty = self.__wcs.wcs_pix2world(0.5, 0.5+dimy, 1)
+            # toplefty = header['CRVAL2'+altkey] + geot5 * (0.5+dimy - header['CRPIX2'+altkey]) + geot4 * (0.5+dimy - header['CRPIX1'+altkey])
+
+            # FITS rasters are still read upside-down by GIS software UpperLeftCorner is LowerLeftCorner for now
             topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
-            toplefty = header['CRVAL2'+altkey] + geot5 * (0.5+dimy - header['CRPIX2'+altkey]) + geot4 * (0.5+dimy - header['CRPIX1'+altkey])
+            toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
 
         # Defining projection type
@@ -128,6 +139,7 @@ class fitskeys(object):
         if ( wcsproj == 'SFL' ):
             gdalproj = 'Sinusoidal'
             clong = self.__header['CRVAL1']
+            srs.SetProjParm('longitude_of_center',clong)
         elif ( wcsproj == 'ZEA' ):
             gdalproj = 'Lambert_Azimuthal_Equal_Area'
         elif ( wcsproj == 'COO' ):
@@ -148,13 +160,19 @@ class fitskeys(object):
 
         projname = gdalproj + ' ' + target
         srs.SetProjection(gdalproj)
-        srs.SetProjParm('longitude_of_center',clong)
         srs.SetProjParm('false_easting',fe)
         srs.SetProjParm('false_northing',fn)
 
         wkt = srs.ExportToWkt()
         dst_ds.SetProjection(wkt)
 
+        # Adding SimpleSource info
+        band = dst_ds.GetRasterBand(1)
+        band.SetNoDataValue(nodata)
+        band.SetScale(bscale)
+        band.SetOffset(bzero)
+        
         # Close properly the dataset
         dst_ds = None
+        src_ds = None
 
