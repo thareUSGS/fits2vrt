@@ -72,8 +72,10 @@ class fitskeys(object):
         elif (fbittype == 16):
             if (bzero <= 0):
               gbittype = gdal.GDT_Int16
+              nodata = -32768
             elif (bzero > 0):
               gbittype = gdal.GDT_UInt16
+              nodata = 0
         elif (fbittype == 32):
             if (bzero <= 0):
               gbittype = gdal.GDT_Int32
@@ -154,6 +156,8 @@ class fitskeys(object):
             gdalproj = 'perspective_point_height'
         elif ( wcsproj == 'STG' ):
             gdalproj = 'Stereographic'
+            cmer = self.__header['CRVAL1']
+            srs.SetProjParm('central_meridian',cmer)
         else:
             print "Unknown projection"
             print wcsproj
