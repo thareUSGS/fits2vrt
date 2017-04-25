@@ -1,7 +1,7 @@
 """
 This file is part of fits2vrt
 A FITS to GDAL Virtual Header conversion tool
-02/03/2016
+25/04/2017
 Author : Chiara Marmo (chiara.marmo@u-psud.fr)
 Copyright : CNRS, Universite Paris-Sud
 """
@@ -27,6 +27,9 @@ class fitskeys(object):
         if os.path.isfile(imname):
             hdulist = fits.open(imname)
             self.__header = hdulist[0].header
+            lenheader = (len(hdulist[0].header)+1)*80
+            [blocks,remainder] = divmod(lenheader,2880)
+            self.__offset = 2880 * (blocks+1)
             hdulist.close()
             self.__wcs = wcs.WCS(self.__header)
 
@@ -44,7 +47,7 @@ class fitskeys(object):
 
     # FITS metadata conversion to GDAL VRT Header
     def fits2vrt(self):
-        src_ds = gdal.Open(self.__name)
+        #src_ds = gdal.Open(self.__name)
         driver = gdal.GetDriverByName('vrt')
         vrtname, fitsext = os.path.splitext(self.__name)
 
@@ -69,7 +72,9 @@ class fitskeys(object):
         if (fbittype == 8):
             gbittype = gdal.GDT_Byte
             nodata = 0
+            pxoffset = 1
         elif (fbittype == 16):
+            pxoffset = 2
             if (bzero <= 0):
               gbittype = gdal.GDT_Int16
               nodata = -32768
@@ -77,20 +82,41 @@ class fitskeys(object):
               gbittype = gdal.GDT_UInt16
               nodata = 0
         elif (fbittype == 32):
+            pxoffset = 4
             if (bzero <= 0):
               gbittype = gdal.GDT_Int32
             elif (bzero > 0):
               gbittype = gdal.GDT_UInt32
         elif (fbittype == -32):
+            pxoffset = 4
             gbittype = gdal.GDT_Float32
         elif (fbittype == -64):
+            pxoffset = 8
             gbittype = gdal.GDT_Float64
         else:
             print "Bit Type not supported"
             print fbittype
 
-        #dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, dimz, gbittype )
-        dst_ds = driver.CreateCopy( vrtname + '.vrt', src_ds, 0)
+        # Addressing FITS as raw raster: this will work without CFITSIO GDAL dependence.
+        dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, 0 )
+        #dst_ds = driver.CreateCopy( vrtname + '.vrt', src_ds, 0)
+
+        lnoffset = dimy * pxoffset
+        src_filename_opt = 'SourceFileName=' + self.__name
+        im_offset_opt = 'ImageOffset=' + str(self.__offset)
+        px_offset_opt = 'PixelOffset=' + str(pxoffset)
+        ln_offset_opt = 'LineOffset=' + str(lnoffset)
+        options = [
+           'subClass=VRTRawRasterBand',
+           src_filename_opt,
+           'relativeToVRT=0',
+           im_offset_opt,
+           px_offset_opt,
+           ln_offset_opt,
+           'ByteOrder=MSB'
+        ]
+
+        result = dst_ds.AddBand( gbittype, options )
 
         # Setting all non mandatory FITS keywords as metadata
         # COMMENT and HISTORY keywords are excluded too
@@ -178,5 +204,5 @@ class fitskeys(object):
         
         # Close properly the dataset
         dst_ds = None
-        src_ds = None
+        #src_ds = None
 
