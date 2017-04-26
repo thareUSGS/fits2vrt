@@ -27,6 +27,8 @@ class fitskeys(object):
         if os.path.isfile(imname):
             hdulist = fits.open(imname)
             self.__header = hdulist[0].header
+            #not sure what this is (? from Trent)
+            #irs.SetProjection(gdalproj)
             lenheader = (len(hdulist[0].header)+1)*80
             [blocks,remainder] = divmod(lenheader,2880)
             self.__offset = 2880 * (blocks+1)
@@ -72,7 +74,8 @@ class fitskeys(object):
         if (fbittype == 8):
             gbittype = gdal.GDT_Byte
             nodata = 0
-            pxoffset = 1
+            #pixeloffset needed for raw VRT type (points into FITS image)
+            pixeloffset = 1
         elif (fbittype == 16):
             pxoffset = 2
             if (bzero <= 0):
@@ -96,11 +99,16 @@ class fitskeys(object):
         else:
             print "Bit Type not supported"
             print fbittype
+            return 'fail' # need better error text or method
 
         # Addressing FITS as raw raster: this will work without CFITSIO GDAL dependence.
         dst_ds = driver.Create( vrtname + '.vrt', dimx, dimy, 0 )
+
+        # The next lines only work if gdal has cfitsio properly configured
+        #src_ds = gdal.Open(self.__name)
         #dst_ds = driver.CreateCopy( vrtname + '.vrt', src_ds, 0)
 
+        #lineoffset only needed for raw VRT type
         lnoffset = dimy * pxoffset
         src_filename_opt = 'SourceFileName=' + self.__name
         im_offset_opt = 'ImageOffset=' + str(self.__offset)
@@ -109,14 +117,17 @@ class fitskeys(object):
         options = [
            'subClass=VRTRawRasterBand',
            src_filename_opt,
-           'relativeToVRT=0',
+           'relativeToVRT=1',
            im_offset_opt,
            px_offset_opt,
            ln_offset_opt,
-           'ByteOrder=MSB'
+           'ByteOrder=MSB' #FITS is always MSB
         ]
 
         result = dst_ds.AddBand( gbittype, options )
+        if result != gdal.CE_None:
+            print 'AddBand() returned error code'
+            return 'fail'
 
         # Setting all non mandatory FITS keywords as metadata
         # COMMENT and HISTORY keywords are excluded too
@@ -158,42 +169,122 @@ class fitskeys(object):
         # Defining projection type
         # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
         # and http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1077CFUL (FITS)
-        fe = 0.0
-        fn = 0.0
-        srs=osr.SpatialReference()
-        srs.SetProjParm('PrimeMeridian',0)
+
+        #Get radius values (maybe add an external method (e.g. string or URI)
+        # new FITS keywords A_RADIUS, C_RADIUS 
+        # note B_RADIUS (to define a triaxial) not generally used for mapping applications
+        semiMajor = header['A_RADIUS']
+        semiMinor = header['C_RADIUS']
+        if ((semiMajor - semiMinor) > 0.00001):
+            invFlattening= semiMajor / ( semiMajor - semiMinor)
+        else:
+            invFlattening= 0.0
+
+        srs = osr.SpatialReference()
+        gcsName   = 'GCS_' + target
+        datumName = 'D_' + target
+        srsGeoCS  = 'GEOGCS["'+gcsName+'",DATUM["'+datumName+'",SPHEROID["'+ \
+                        target+'",' + str(semiMajor) + ',' + str(invFlattening) + \
+                        ']], PRIMEM["Reference_Meridian",0],' + \
+                        'UNIT["degree",0.0174532925199433]]'
+                   
+        #print srsGeoCS
+        srs.ImportFromWkt(srsGeoCS)
+
         wcsproj = (self.__header['CTYPE1'])[-3:]
         # Sinusoidal / SFL projection
         if ( wcsproj == 'SFL' ):
             gdalproj = 'Sinusoidal'
+            srs.SetProjection(gdalproj)
             clong = self.__header['CRVAL1']
             srs.SetProjParm('longitude_of_center',clong)
+
         elif ( wcsproj == 'ZEA' ):
             gdalproj = 'Lambert_Azimuthal_Equal_Area'
+            srs.SetProjection(gdalproj)
+            clong = self.__header['CRVAL1']
+            srs.SetProjParm('longitude_of_center',clong)
+            #clat = self.__header['XXXXX']
+            #srs.SetProjParm('latitude_of_center',clat)
+
         elif ( wcsproj == 'COO' ):
             gdalproj = 'Lambert_Conformal_Conic_1SP'
+            srs.SetProjection(gdalproj)
+            clong = self.__header['CRVAL1']
+            srs.SetProjParm('longitude_of_center',clong)
+            #clat = self.__header['XXXXX']
+            #srs.SetProjParm('latitude_of_center',clat)
+            scale = self.__header['XXXXX']
+            if scale is not None:
+                srs.SetProjParm('scale_factor',scale)
+            else: #set default of 1.0
+                srs.SetProjParm('scale_factor',1.0)
+
         elif ( wcsproj == 'CAR' ):
             gdalproj = 'Equirectangular'
-        elif ( wcsproj == 'MER' ):
-            gdalproj = 'Transverse_Mercator'
-        elif ( wcsproj == 'SIN' ):
-            gdalproj = 'Orthographic'
-        elif ( wcsproj == 'AZP' ):
-            gdalproj = 'perspective_point_height'
-        elif ( wcsproj == 'STG' ):
-            gdalproj = 'Stereographic'
+            srs.SetProjection(gdalproj)
             cmer = self.__header['CRVAL1']
             srs.SetProjParm('central_meridian',cmer)
+            # The standard_parallel_1 defines where the local radius is calculated
+            # not the center of Y Cartesian system (which is latitude_of_origin)
+            #spar = self.__header['XXXXX']
+            #srs.SetProjParm('standard_parallel_1',spar)
+            #olat = self.__header['XXXXX']
+            if olat is not None:
+                srs.SetProjParm('latitude_of_origin',olat)
+            else: #set default of zero
+                srs.SetProjParm('latitude_of_origin',0)
+
+        elif ( wcsproj == 'MER' ):
+            gdalproj = 'Transverse_Mercator'
+            srs.SetProjection(gdalproj)
+            cmer = self.__header['CRVAL1']
+            srs.SetProjParm('central_meridian',cmer)
+            #olat = self.__header['XXXXX']
+            #srs.SetProjParm('latitude_of_origin',olat)
+            #scale = self.__header['XXXXX']
+            if scale is not None:
+                srs.SetProjParm('scale_factor',scale)
+            else: #set default of 1.0
+                srs.SetProjParm('scale_factor',1.0)
+
+        elif ( wcsproj == 'SIN' ):
+            gdalproj = 'Orthographic'
+            srs.SetProjection(gdalproj)
+            cmer = self.__header['CRVAL1']
+            srs.SetProjParm('central_meridian',cmer)
+            #olat = self.__header['XXXXX']
+            #srs.SetProjParm('latitude_of_origin',olat)
+
+        elif ( wcsproj == 'AZP' ):
+            gdalproj = 'perspective_point_height'
+            srs.SetProjection(gdalproj)
+            # appears to need height... maybe center lon/lat
+
+        elif ( wcsproj == 'STG' ):
+            # todo need to get parameters
+            gdalproj = 'Polar_Stereographic'
+            srs.SetProjection(gdalproj)
+            cmer = self.__header['CRVAL1']
+            srs.SetProjParm('central_meridian',cmer)
+            #olat = self.__header['XXXXX']
+            #srs.SetProjParm('latitude_of_origin',olat)
+
+            #hardwired for testing (MOLA)
+            srs.SetProjParm('latitude_of_origin',90)
         else:
             print "Unknown projection"
             print wcsproj
+            return 'fail'
 
-        projname = gdalproj + ' ' + target
-        srs.SetProjection(gdalproj)
-        srs.SetProjParm('false_easting',fe)
-        srs.SetProjParm('false_northing',fn)
+        projname = gdalproj + '_' + target
+        srs.SetAttrValue('projcs',projname)
+        # false easting and northing not used for planetary
+        srs.SetProjParm('false_easting',0.0)
+        srs.SetProjParm('false_northing',0.0)
 
         wkt = srs.ExportToWkt()
+        print 'projection:\n'+wkt
         dst_ds.SetProjection(wkt)
 
         # Adding SimpleSource info
