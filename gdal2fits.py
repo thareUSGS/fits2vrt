@@ -79,7 +79,7 @@ def main( argv = None ):
     papszExtraMDDomains = [ ]
     pszProjection = None
     bShowFileList = True
-	bComputeMinMax = False
+    bComputeMinMax = False
     bands = 1
     centLat = 0
     centLon = 0
@@ -110,7 +110,7 @@ def main( argv = None ):
     while i < nArgc:
 
         if EQUAL(argv[i], "--utility_version"):
-            print("%s is running against GDAL %s" %
+            print("%s is running against GDAL %s" % \
                    (argv[0], gdal.VersionInfo("RELEASE_NAME")))
             return 0
         elif EQUAL(argv[i], "-debug"):
@@ -120,8 +120,8 @@ def main( argv = None ):
         elif EQUAL(argv[i], "-force360"):
             force360 = True
         elif EQUAL(argv[i], "-centerLon"):
-		i = i + 1
-		centerLon = float(argv[i])
+            i = i + 1
+            centerLon = float(argv[i])
         elif EQUAL(argv[i], "-mdd") and i < nArgc-1:
             i = i + 1
             papszExtraMDDomains.append( argv[i] )
@@ -208,7 +208,7 @@ def main( argv = None ):
 
             semiMajor = hSRS.GetSemiMajor() 
             semiMinor = hSRS.GetSemiMinor()
-			# if image is in degrees (deg/pix) then force meters (can be removed)
+            # if image is in degrees (deg/pix) then force meters (can be removed)
             if (pszProjection[0:6] == "GEOGCS"):
                 mapProjection = "CAR"
                 centLon = hSRS.GetProjParm('central_meridian')
@@ -217,22 +217,22 @@ def main( argv = None ):
                 mapProjection = hSRS.GetAttrValue("PROJECTION",0)
 
                 if EQUAL(mapProjection,"Sinusoidal"):
-				    mapProjection = "SFL"
+                    mapProjection = "SFL"
                     centLon = hSRS.GetProjParm('central_meridian')
 
                 if EQUAL(mapProjection,"Equirectangular"):
-				    mapProjection = "CAR"
+                    mapProjection = "CAR"
                     centLat = hSRS.GetProjParm('standard_parallel_1')
                     centLon = hSRS.GetProjParm('central_meridian')
 
-				#Transverse Mercator maybe not supported in FITS....?
+                #Transverse Mercator maybe not supported in FITS....?
                 #if EQUAL(mapProjection,"Transverse_Mercator"):
                 #    mapProjection = "MER"
                 #    centLat = hSRS.GetProjParm('standard_parallel_1')
                 #    centLon = hSRS.GetProjParm('central_meridian')
                 #    TMscale = hSRS.GetProjParm('scale_factor')
                 #    #Need to research when TM actually applies false values
-				#    #but planetary is almost always 0.0
+                #    #but planetary is almost always 0.0
                 #    falseEast =  hSRS.GetProjParm('false_easting')
                 #    falseNorth =  hSRS.GetProjParm('false_northing')
 
@@ -241,14 +241,9 @@ def main( argv = None ):
                     centLat = hSRS.GetProjParm('standard_parallel_1')
                     centLon = hSRS.GetProjParm('central_meridian')
 
-				#Mercator NOT supported in FITS....?
-                if EQUAL(mapProjection,"Mercator_1SP") or :
+                #Mercator NOT supported in FITS....?
+                if (EQUAL(mapProjection,"Mercator_1SP") or EQUAL(mapProjection,"Mercator")):
                     mapProjection = "MER" # a guess
-                    centLat = hSRS.GetProjParm('standard_parallel_1')
-                    centLon = hSRS.GetProjParm('central_meridian')
-
-                if EQUAL(mapProjection,"Mercator"):
-                    mapProjection = "MRC" # a guess
                     centLat = hSRS.GetProjParm('standard_parallel_1')
                     centLon = hSRS.GetProjParm('central_meridian')
 
@@ -283,7 +278,7 @@ def main( argv = None ):
 #/* -------------------------------------------------------------------- */
     adfGeoTransform = inDataset.GetGeoTransform(can_return_null = True)
     if adfGeoTransform is not None:
-	    #figure it out for fits
+        #figure it out for fits
         UpperLeftCornerX = adfGeoTransform[0] - falseEast
         UpperLeftCornerY = adfGeoTransform[3] - falseNorth
 
@@ -318,15 +313,15 @@ def main( argv = None ):
              mapres = 1 / (adfGeoTransform[1] / (semiMajor * math.pi / 180.0))
              mres = adfGeoTransform[1] 
 
-	    #from fits2vrt notes
-		# Defining Geotransform: if linear WCS is defined 
+        #from fits2vrt notes
+        # Defining Geotransform: if linear WCS is defined 
         # GeoTransform[1] = CD1_1
         # GeoTransform[2] = CD1_2
         # GeoTransform[4] = CD2_1
         # GeoTransform[5] = CD2_2
         # GeoTransform[0] and GeoTransform[3] must be computed.
 
-			 
+             
 #/* -------------------------------------------------------------------- */
 #/*      Setup projected to lat/long transform if appropriate.           */
 #/* -------------------------------------------------------------------- */
@@ -383,142 +378,146 @@ def main( argv = None ):
 #/* ==================================================================== */
 #/*      Loop over bands to write image.                                                */
 #/* ==================================================================== */
-	bands = inDataset.RasterCount
-	for iBand in range(1, inDataset.RasterCount + 1):
+    bands = inDataset.RasterCount
+    for iBand in range(1, inDataset.RasterCount + 1):
 
-		iBand = inDataset.GetRasterBand(iBand)
-		(nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
-		if debug:
-            print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( iBand, \
-					nBlockXSize, nBlockYSize, \
-					gdal.GetDataTypeName(iBand.DataType), \
-					gdal.GetColorInterpretationName( \
-					iBand.GetRasterColorInterpretation()) ))
+        iBand = inDataset.GetRasterBand(iBand)
+        (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
+        if debug:
+                print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( iBand, \
+                       nBlockXSize, nBlockYSize, \
+                       gdal.GetDataTypeName(iBand.DataType), \
+                       gdal.GetColorInterpretationName( \
+                       iBand.GetRasterColorInterpretation()) ))
 
-			if iBand.GetDescription() is not None \
-					and len(iBand.GetDescription()) > 0 :
-				print( "  Description = %s" % iBand.GetDescription() )
+                if iBand.GetDescription() is not None \
+                                          and len(iBand.GetDescription()) > 0 :
+                    print( "  Description = %s" % iBand.GetDescription() )
 
-		dfMin = iBand.GetMinimum()
-		dfMax = iBand.GetMaximum()
-		if dfMin is not None or dfMax is not None or bComputeMinMax:
-			line =  "  "
-			if dfMin is not None:
-				line = line + ("Min=%.3f " % dfMin)
-			if dfMax is not None:
-				line = line + ("Max=%.3f " % dfMax)
+        dfMin = iBand.GetMinimum()
+        dfMax = iBand.GetMaximum()
+        if dfMin is not None or dfMax is not None or bComputeMinMax:
+                    line =  "  "
+                    if dfMin is not None:
+                        line = line + ("Min=%.3f " % dfMin)
+                    if dfMax is not None:
+                        line = line + ("Max=%.3f " % dfMax)
 
-			if bComputeMinMax:
-				gdal.ErrorReset()
-				adfCMinMax = iBand.ComputeRasterMinMax(False)
-				dfMin = adfCMinMax[0]
-				dfMax = adfCMinMax[1]
-					if gdal.GetLastErrorType() == gdal.CE_None:
-						line = line + ( "  Computed Min/Max=%.3f,%.3f" % ( \
-										  dfMin, dfMax ))
-			if debug:
-				print( line )
-
-
-		dfNoData = iBand.GetNoDataValue()
-		if dfNoData is not None:
-		    if debug:
-				if dfNoData != dfNoData:
-					print( "  NoData Value=nan" )
-				else:
-					print( "  NoData Value=%.18g" % dfNoData )
+                    if bComputeMinMax:
+                        gdal.ErrorReset()
+                        adfCMinMax = iBand.ComputeRasterMinMax(False)
+                        dfMin = adfCMinMax[0]
+                        dfMax = adfCMinMax[1]
+                        if gdal.GetLastErrorType() == gdal.CE_None:
+                            line = line + ( "  Computed Min/Max=%.3f,%.3f" % ( \
+                                      dfMin, dfMax ))
+                    if debug:
+                        print( line )
 
 
-		if debug:				
-			if iBand.GetScale() != 1.0 or iBand.GetOffset() != 0.0:
-				print( "  Offset: %.15g,   Scale:%.15g" % \
-						( iBand.GetOffset(), iBand.GetScale()))
+        dfNoData = iBand.GetNoDataValue()
+        if dfNoData is not None:
+            if debug:
+                if dfNoData != dfNoData:
+                    print( "  NoData Value=nan" )
+                else:
+                    print( "  NoData Value=%.18g" % dfNoData )
 
-		#Load band into numpy array for writing using Astropy
-		raster_data = iBand.ReadAsArray(0, 0, cols, rows)
+
+        if debug:               
+            if iBand.GetScale() != 1.0 or iBand.GetOffset() != 0.0:
+                print( "  Offset: %.15g,   Scale:%.15g" % \
+                         ( iBand.GetOffset(), iBand.GetScale()))
+
+        #Load band into numpy array for writing using Astropy
+        raster_data = iBand.ReadAsArray(0, 0, cols, rows)
 
    
-		#get the datatype
-		print gdal.GetDataTypeName(iBand.DataType)
-		if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
-			fbittype = -32
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
-			fbittype = -64
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT64"):
-			fbittype = 64
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT32"):
-			fbittype = 32
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT16"):
-			fbittype = 16
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "UINT16"):
-			fbittype = 16
-			bzero = -32768
-			bscale = 1
-		elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Byte"):
-			fbittype = 8
-		else:
-			print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
-			sys.exit(1)
+        #get the datatype
+        print gdal.GetDataTypeName(iBand.DataType)
+        if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
+            fbittype = -32
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
+            fbittype = -64
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT64"):
+            fbittype = 64
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT32"):
+            fbittype = 32
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT16"):
+            fbittype = 16
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "UINT16"):
+            fbittype = 16
+            bzero = -32768
+            bscale = 1
+        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Byte"):
+            fbittype = 8
+        else:
+            print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
+            sys.exit(1)
 
-		#Create FITS using this information
-		# filename : dst_fits
-		# NAXIS1   : inDataset.RasterXSize
-		# NAXIS2   : inDataset.RasterYSize
-		# NAXIS3   : inDataset.RasterCount
-		# BITPIX   : fbittype
-		# ByteOrder  = MSB  - but need to write out this correctly
-		# BZERO section - allows for user to set
-		
-		if base is None: 
-		#    BZERO   : iBand.GetOffset()
-		else:
-		#    BZERO   : base
-		
-		# BSCALE section - allows for user to set
-		if multiplier is None: 
-		#    BSCALE  : iBand.GetScale()
-		else:
-		#    BSCALE  : multiplier
-		
-		# OBJECT   : target
-		# CTYPE1   : mapProjection
-		# A_RADIUS : semiMajor
-		# B_RADIUS : SemiMajor
-		# C_RADIUS : SemiMinor
-		
-		#Need to inverse these to get values....
-		topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
-		toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
+        #Create FITS using this information
+        # filename : dst_fits
+        # NAXIS1   : inDataset.RasterXSize
+        # NAXIS2   : inDataset.RasterYSize
+        # NAXIS3   : inDataset.RasterCount
+        # BITPIX   : fbittype
+        # ByteOrder  = MSB  - but need to write out this correctly
+        # BZERO section - allows for user to set
+        
+        #if base is None: 
+        #    BZERO   : iBand.GetOffset()
+        #else:
+        #    BZERO   : base
+        
+        # BSCALE section - allows for user to set
+        #if multiplier is None: 
+        #    BSCALE  : iBand.GetScale()
+        #else:
+        #    BSCALE  : multiplier
+        
+        # OBJECT   : target
+        # CTYPE1   : mapProjection
+        # A_RADIUS : semiMajor
+        # B_RADIUS : SemiMajor
+        # C_RADIUS : SemiMinor
+        
+        #Need to inverse these to get values (from fits2vrt.py)
+        #topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
+        #toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
 
-		# CRPIX1   : UpperLeftCornerX (BUT calc to pixel space)
-		# CRPIX2   : UpperLeftCornerY (BUT calc to pixel space)
-		
-		
-		if ((centLon < 0) and force360):
-		   centLon = centLon + 360
-		# CRVAL1   : centLon  # not sure this is correct
-		# CRVAL2   : centLat  # not sure this is correct
-		
-		#####################################################
-		# Below this line, none of these are probably needed
-		# pixel size in degrees : mapres 
-		# MinimumLatitude : lry
-		# MaximumLatitude : uly
+        # CRPIX1   : UpperLeftCornerX (BUT calc to pixel space)
+        # CRPIX2   : UpperLeftCornerY (BUT calc to pixel space)
+        
+        
+        if ((centLon < 0) and force360):
+           centLon = centLon + 360
+        # CRVAL1   : centLon  # not sure this is correct
+        # CRVAL2   : centLat  # not sure this is correct
+        # CRPIX1   : need to calc
+        # CRPIX2   : need to calc
+        
+        #####################################################
+        # Below this line, none of these are probably needed
+        # pixel size in degrees : mapres 
+        # MinimumLatitude : lry
+        # MaximumLatitude : uly
 
-		#push into 360 domain
-		if (force360):
-		  if (ulx < 0):
-			 ulx = ulx + 360
-		  if (lrx < 0):
-			 lrx = lrx + 360
-		# MinimumLongitude : urx)
-		# MaximumLongitude : lrx)
+        #push into 360 domain
+        if (force360):
+          if (ulx < 0):
+             ulx = ulx + 360
+          if (lrx < 0):
+             lrx = lrx + 360
+        # MinimumLongitude : urx)
+        # MaximumLongitude : lrx)
 
-		# UpperLeftCornerX in meters : UpperLeftCornerX
-		# UpperLeftCornerY in meters : UpperLeftCornerY
+        # UpperLeftCornerX in meters : UpperLeftCornerX
+        # UpperLeftCornerY in meters : UpperLeftCornerY
    
     
-	raster_data = None
+    raster_data = None
+    iBand = None
+    inDataset = None
     return 0
 
 #/************************************************************************/
