@@ -4,7 +4,8 @@
 # *
 # * Project: GDAL Utilities
 # * Purpose: Create a "geo"FITS compatible image from a GDAL supported image.
-# * Author:  Trent Hare, <thare@usgs.gov>
+# * Authors:  Trent Hare, U.S. Geological Survey, <thare@usgs.gov>
+# *           Chiara Marmo Paris-Sud, France
 # * Date:    June 27, 2017
 # * version: 0.1
 # *
@@ -75,11 +76,11 @@ def EQUAL(a, b):
 def main( argv = None ):
 
     debug = False
-    pszFilename = None
-    papszExtraMDDomains = [ ]
-    pszProjection = None
+    inFilename = None
+    inProjection = None
     bShowFileList = True
     bComputeMinMax = False
+    dst_fits = None
     bands = 1
     centLat = 0
     centLon = 0
@@ -122,9 +123,6 @@ def main( argv = None ):
         elif EQUAL(argv[i], "-centerLon"):
             i = i + 1
             centerLon = float(argv[i])
-        elif EQUAL(argv[i], "-mdd") and i < nArgc-1:
-            i = i + 1
-            papszExtraMDDomains.append( argv[i] )
         elif EQUAL(argv[i], "-base"):
             i = i + 1
             base = float(argv[i])
@@ -133,8 +131,8 @@ def main( argv = None ):
             multiplier = float(argv[i])
         elif argv[i][0] == '-':
             return Usage(argv[0])
-        elif pszFilename is None:
-            pszFilename = argv[i]
+        elif inFilename is None:
+            inFilename = argv[i]
         elif dst_fits is None:
             dst_fits = argv[i]
         else:
@@ -142,7 +140,7 @@ def main( argv = None ):
 
         i = i + 1
 
-    if pszFilename is None:
+    if inFilename is None:
         return Usage(argv[0])
     if dst_fits is None:
         return Usage(argv[0])
@@ -150,9 +148,9 @@ def main( argv = None ):
 #/* -------------------------------------------------------------------- */
 #/*      Open dataset.                                                   */
 #/* -------------------------------------------------------------------- */
-    inDataset = gdal.Open( pszFilename, gdal.GA_ReadOnly )
+    inDataset = gdal.Open( inFilename, gdal.GA_ReadOnly )
     if inDataset is None:
-        print("gdalinfo failed - unable to open '%s'." % pszFilename )
+        print("gdalinfo failed - unable to open '%s'." % inFilename )
         sys.exit(1)
 
     # Open the output file.
@@ -183,21 +181,21 @@ def main( argv = None ):
 #/* -------------------------------------------------------------------- */
 #/*      Report projection.                                              */
 #/* -------------------------------------------------------------------- */
-    pszProjection = inDataset.GetProjectionRef()
-    if pszProjection is not None:
+    inProjection = inDataset.GetProjectionRef()
+    if inProjection is not None:
 
         hSRS = osr.SpatialReference()
-        if hSRS.ImportFromWkt(pszProjection ) == gdal.CE_None:
+        if hSRS.ImportFromWkt(inProjection ) == gdal.CE_None:
             pszPrettyWkt = hSRS.ExportToPrettyWkt(False)
             if debug:
                 print( "Coordinate System is:\n%s" % pszPrettyWkt )
         else:
             if debug:
-                print( "Coordinate System is `%s'" % pszProjection )
+                print( "Coordinate System is `%s'" % inProjection )
 
 
         hSRS = osr.SpatialReference()
-        if hSRS.ImportFromWkt(pszProjection) == gdal.CE_None:
+        if hSRS.ImportFromWkt(inProjection) == gdal.CE_None:
             pszPrettyWkt = hSRS.ExportToPrettyWkt(False)
 
             #print( "Coordinate System is:\n%s" % pszPrettyWkt )
@@ -209,11 +207,11 @@ def main( argv = None ):
             semiMajor = hSRS.GetSemiMajor() 
             semiMinor = hSRS.GetSemiMinor()
             # if image is in degrees (deg/pix) then force meters (can be removed)
-            if (pszProjection[0:6] == "GEOGCS"):
+            if (inProjection[0:6] == "GEOGCS"):
                 mapProjection = "CAR"
                 centLon = hSRS.GetProjParm('central_meridian')
 
-            if (pszProjection[0:6] == "PROJCS"):
+            if (inProjection[0:6] == "PROJCS"):
                 mapProjection = hSRS.GetAttrValue("PROJECTION",0)
 
                 if EQUAL(mapProjection,"Sinusoidal"):
@@ -261,11 +259,9 @@ def main( argv = None ):
                     mapProjection = "STG"
                     centLat = hSRS.GetProjParm('latitude_of_origin')
                     centLon = hSRS.GetProjParm('central_meridian')
-            if debug:
-                print( "Coordinate System is:\n%s" % pszPrettyWkt )
         else:
             print( "Warning - Currently we can't parse this type of projection" )
-            print( "Coordinate System is `%s'" % pszProjection )
+            print( "Coordinate System is `%s'" % inProjection )
             target = "n/a"
             #sys.exit(1)
     else:
@@ -304,7 +300,7 @@ def main( argv = None ):
 
         #Using a very simple method to calculate cellsize from degree to meters. 
         #Warning: might not always be good.
-        if (pszProjection[0:6] == "GEOGCS"):
+        if (inProjection[0:6] == "GEOGCS"):
             #convert degrees/pixel to m/pixel 
              mapres = 1 / adfGeoTransform[1]
              mres = adfGeoTransform[1] * (semiMajor * math.pi / 180.0)
@@ -325,8 +321,8 @@ def main( argv = None ):
 #/* -------------------------------------------------------------------- */
 #/*      Setup projected to lat/long transform if appropriate.           */
 #/* -------------------------------------------------------------------- */
-    if pszProjection is not None and len(pszProjection) > 0:
-        hProj = osr.SpatialReference( pszProjection )
+    if inProjection is not None and len(inProjection) > 0:
+        hProj = osr.SpatialReference( inProjection )
         if hProj is not None:
             hLatLong = hProj.CloneGeogCS()
 
@@ -369,22 +365,26 @@ def main( argv = None ):
  
     #Calculate Simple Cylindrical X,Y in meters from bounds if not projected.
     #Needs more testing.                     
-    if (pszProjection[0:6] == "GEOGCS"):
+    if (inProjection[0:6] == "GEOGCS"):
         #note that: mres = adfGeoTransform[1] * (semiMajor * math.pi / 180.0)
         UpperLeftCornerX = semiMajor * (ulx - centLon) * math.pi / 180.0
         UpperLeftCornerY = semiMajor * uly * math.pi / 180.0
         
 
+    #Initialize output image and header
+    tofits = open(dst_fits,'wt')
+
+
 #/* ==================================================================== */
 #/*      Loop over bands to write image.                                                */
 #/* ==================================================================== */
     bands = inDataset.RasterCount
-    for iBand in range(1, inDataset.RasterCount + 1):
+    for i in range(1, inDataset.RasterCount + 1):
 
-        iBand = inDataset.GetRasterBand(iBand)
+        iBand = inDataset.GetRasterBand(i)
         (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
         if debug:
-                print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( iBand, \
+                print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( i, \
                        nBlockXSize, nBlockYSize, \
                        gdal.GetDataTypeName(iBand.DataType), \
                        gdal.GetColorInterpretationName( \
@@ -430,11 +430,14 @@ def main( argv = None ):
                          ( iBand.GetOffset(), iBand.GetScale()))
 
         #Load band into numpy array for writing using Astropy
-        raster_data = iBand.ReadAsArray(0, 0, cols, rows)
+        raster_data = iBand.ReadAsArray(0, 0, iBand.XSize, iBand.YSize)
+
+        #Note we are currently loading full band. This can be changed to per line
+        #for i in range(iBand.YSize):
+        #   scanLine = iBand.ReadAsArray(0, i, iBand.XSize, 1, iBand.XSize, 1)
 
    
         #get the datatype
-        print gdal.GetDataTypeName(iBand.DataType)
         if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
             fbittype = -32
         elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
@@ -454,6 +457,10 @@ def main( argv = None ):
         else:
             print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
             sys.exit(1)
+
+        if debug:
+            print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
+            print "FITS type: %s" % str(fbittype)
 
         #Create FITS using this information
         # filename : dst_fits
@@ -513,8 +520,23 @@ def main( argv = None ):
 
         # UpperLeftCornerX in meters : UpperLeftCornerX
         # UpperLeftCornerY in meters : UpperLeftCornerY
-   
-    
+
+        if debug:
+			#testing print per band
+            tofits.write('band {} read\n'.format(i))
+			#test numpy, and how to Mask for stats using GDAL's nodata
+            nodatamask = raster_data == dfNoData
+            raster_data[nodatamask] = dfNoData
+			#or another way
+			#raster_data[raster_data == dfNoData] = np.nan
+            tofits.write('band min: {}\n'.format(raster_data.min()))
+            tofits.write('band max: {}\n'.format(raster_data.max()))
+			
+
+    #end read/write band loop
+    tofits.write("complete\n")
+    #tofits.close()
+    tofits = None
     raster_data = None
     iBand = None
     inDataset = None
