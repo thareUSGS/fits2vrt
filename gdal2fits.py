@@ -372,10 +372,10 @@ def main( argv = None ):
         
 
 #/* ==================================================================== */
-#/*      Initialize output FITS image                                    */
+#/*      Initialize output FITS header - don't add image bands yet       */
 #/* ==================================================================== */
     #Test as simple text file
-    tofits = open(dst_fits,'wt')
+    #tofits = open(dst_fits,'wt')
 
     #Create FITS using this information
     # filename : dst_fits
@@ -442,7 +442,6 @@ def main( argv = None ):
 #/* ==================================================================== */
     bands = inDataset.RasterCount
     for i in range(1, inDataset.RasterCount + 1):
-
         iBand = inDataset.GetRasterBand(i)
         (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
         if debug:
@@ -524,21 +523,47 @@ def main( argv = None ):
             print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
             print "FITS type: %s" % str(fbittype)
 
+        # this method can only output 1 band... Would rather init and
+        # then add bands one at a time...
+        tofits = fits.PrimaryHDU(raster_data)
+        tofits.header['BZERO'] = iBand.GetOffset()
+        tofits.header['BSCALE'] = iBand.GetScale()
+        tofits.header['OBJECT'] = target
+        tofits.header['CTYPE1'] = mapProjection
+        tofits.header['A_RADIUS'] = semiMajor
+        tofits.header['B_RADIUS'] = semiMajor
+        tofits.header['C_RADIUS'] = semiMinor
+        tofits.header['CRPIX1'] = UpperLeftCornerX #BUT calc to pixel space
+        tofits.header['CRPIX2'] = UpperLeftCornerY #BUT calc to pixel space
+                
+        if ((centLon < 0) and force360):
+           centLon = centLon + 360
+        # CRVAL1   : centLon  # not sure this is correct
+        # CRVAL2   : centLat  # not sure this is correct
+        # CRPIX1   : need to calc
+        # CRPIX2   : need to calc
+        tofits.header['CRVAL1'] = centLon #not sure this is correct
+        tofits.header['CRVAL2'] = centLat #not sure this is correct
+        tofits.header['CRPIX1'] = 0 #need to calc
+        tofits.header['CRPIX2'] = 0 #need to calc
+
+        if debug:
+            print 'writing FITS'
+        tofits.writeto(dst_fits)         
 
         #testing print per band
-        tofits.write('band {} read\n'.format(i))
+        #tofits.write('band {} read\n'.format(i))
         #test numpy, and how to Mask for stats using GDAL's nodata
-        nodatamask = raster_data == dfNoData
-        raster_data[nodatamask] = dfNoData
+        #nodatamask = raster_data == dfNoData
+        #raster_data[nodatamask] = dfNoData
         #or another way
         #raster_data[raster_data == dfNoData] = np.nan
-        tofits.write('band min : {}\n'.format(raster_data.min()))
-        tofits.write('band max : {}\n'.format(raster_data.max()))
-        tofits.write('band mean: {}\n'.format(raster_data.mean()))
-            
+        #tofits.write('band min : {}\n'.format(raster_data.min()))
+        #tofits.write('band max : {}\n'.format(raster_data.max()))
+        #tofits.write('band mean: {}\n'.format(raster_data.mean()))
 
     #end read/write band loop
-    tofits.write("complete\n")
+    #tofits.write("complete\n")
     #tofits.close()
     tofits = None
     raster_data = None
