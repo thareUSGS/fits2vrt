@@ -371,12 +371,74 @@ def main( argv = None ):
         UpperLeftCornerY = semiMajor * uly * math.pi / 180.0
         
 
-    #Initialize output image and header
+#/* ==================================================================== */
+#/*      Initialize output FITS image                                    */
+#/* ==================================================================== */
+    #Test as simple text file
     tofits = open(dst_fits,'wt')
 
+    #Create FITS using this information
+    # filename : dst_fits
+    # NAXIS1   : inDataset.RasterXSize
+    # NAXIS2   : inDataset.RasterYSize
+    # NAXIS3   : inDataset.RasterCount
+    # BITPIX   : fbittype
+    # ByteOrder  = MSB  - but need to write out this correctly
+    # BZERO section - allows for user to set
+    
+    #if base is None: 
+    #    BZERO   : iBand.GetOffset()
+    #else:
+    #    BZERO   : base
+    
+    # BSCALE section - allows for user to set
+    #if multiplier is None: 
+    #    BSCALE  : iBand.GetScale()
+    #else:
+    #    BSCALE  : multiplier
+    
+    # OBJECT   : target
+    # CTYPE1   : mapProjection
+    # A_RADIUS : semiMajor
+    # B_RADIUS : SemiMajor
+    # C_RADIUS : SemiMinor
+    
+    #Need to inverse these to get values (from fits2vrt.py)
+    #topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
+    #toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
 
+    # CRPIX1   : UpperLeftCornerX (BUT calc to pixel space)
+    # CRPIX2   : UpperLeftCornerY (BUT calc to pixel space)
+    
+    
+    if ((centLon < 0) and force360):
+       centLon = centLon + 360
+    # CRVAL1   : centLon  # not sure this is correct
+    # CRVAL2   : centLat  # not sure this is correct
+    # CRPIX1   : need to calc
+    # CRPIX2   : need to calc
+    
+    #####################################################
+    # Below this line, none of these are probably needed
+    # pixel size in degrees : mapres 
+    # MinimumLatitude : lry
+    # MaximumLatitude : uly
+
+    #push into 360 domain
+    if (force360):
+      if (ulx < 0):
+         ulx = ulx + 360
+      if (lrx < 0):
+         lrx = lrx + 360
+    # MinimumLongitude : urx)
+    # MaximumLongitude : lrx)
+
+    # UpperLeftCornerX in meters : UpperLeftCornerX
+    # UpperLeftCornerY in meters : UpperLeftCornerY
+    
+        
 #/* ==================================================================== */
-#/*      Loop over bands to write image.                                                */
+#/*      Loop over bands to write out                                    */
 #/* ==================================================================== */
     bands = inDataset.RasterCount
     for i in range(1, inDataset.RasterCount + 1):
@@ -462,76 +524,18 @@ def main( argv = None ):
             print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
             print "FITS type: %s" % str(fbittype)
 
-        #Create FITS using this information
-        # filename : dst_fits
-        # NAXIS1   : inDataset.RasterXSize
-        # NAXIS2   : inDataset.RasterYSize
-        # NAXIS3   : inDataset.RasterCount
-        # BITPIX   : fbittype
-        # ByteOrder  = MSB  - but need to write out this correctly
-        # BZERO section - allows for user to set
-        
-        #if base is None: 
-        #    BZERO   : iBand.GetOffset()
-        #else:
-        #    BZERO   : base
-        
-        # BSCALE section - allows for user to set
-        #if multiplier is None: 
-        #    BSCALE  : iBand.GetScale()
-        #else:
-        #    BSCALE  : multiplier
-        
-        # OBJECT   : target
-        # CTYPE1   : mapProjection
-        # A_RADIUS : semiMajor
-        # B_RADIUS : SemiMajor
-        # C_RADIUS : SemiMinor
-        
-        #Need to inverse these to get values (from fits2vrt.py)
-        #topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
-        #toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
 
-        # CRPIX1   : UpperLeftCornerX (BUT calc to pixel space)
-        # CRPIX2   : UpperLeftCornerY (BUT calc to pixel space)
-        
-        
-        if ((centLon < 0) and force360):
-           centLon = centLon + 360
-        # CRVAL1   : centLon  # not sure this is correct
-        # CRVAL2   : centLat  # not sure this is correct
-        # CRPIX1   : need to calc
-        # CRPIX2   : need to calc
-        
-        #####################################################
-        # Below this line, none of these are probably needed
-        # pixel size in degrees : mapres 
-        # MinimumLatitude : lry
-        # MaximumLatitude : uly
-
-        #push into 360 domain
-        if (force360):
-          if (ulx < 0):
-             ulx = ulx + 360
-          if (lrx < 0):
-             lrx = lrx + 360
-        # MinimumLongitude : urx)
-        # MaximumLongitude : lrx)
-
-        # UpperLeftCornerX in meters : UpperLeftCornerX
-        # UpperLeftCornerY in meters : UpperLeftCornerY
-
-        if debug:
-			#testing print per band
-            tofits.write('band {} read\n'.format(i))
-			#test numpy, and how to Mask for stats using GDAL's nodata
-            nodatamask = raster_data == dfNoData
-            raster_data[nodatamask] = dfNoData
-			#or another way
-			#raster_data[raster_data == dfNoData] = np.nan
-            tofits.write('band min: {}\n'.format(raster_data.min()))
-            tofits.write('band max: {}\n'.format(raster_data.max()))
-			
+        #testing print per band
+        tofits.write('band {} read\n'.format(i))
+        #test numpy, and how to Mask for stats using GDAL's nodata
+        nodatamask = raster_data == dfNoData
+        raster_data[nodatamask] = dfNoData
+        #or another way
+        #raster_data[raster_data == dfNoData] = np.nan
+        tofits.write('band min : {}\n'.format(raster_data.min()))
+        tofits.write('band max : {}\n'.format(raster_data.max()))
+        tofits.write('band mean: {}\n'.format(raster_data.mean()))
+            
 
     #end read/write band loop
     tofits.write("complete\n")
