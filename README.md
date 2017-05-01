@@ -1,6 +1,9 @@
 # fits2vrt
 WCS FITS conversion to Virtual GDAL header
 
+## gdal2fits
+Temporary location for script to go from a GDAL supported image to GeoFITS
+
 ### Howto
 From your python prompt:
 
