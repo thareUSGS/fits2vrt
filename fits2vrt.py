@@ -235,18 +235,19 @@ class fitskeys(object):
             else: #set default of zero
                 srs.SetProjParm('latitude_of_origin',0)
 
-        elif ( wcsproj == 'MER' ):
-            gdalproj = 'Transverse_Mercator'
+	#Here we are using Mercator not Transverse Mercator but
+	#There is a change FITS might be Hotine Merc or Trans Merc
+        elif ( wcsproj == 'MER' ):  
+            gdalproj = 'Mercator'
             srs.SetProjection(gdalproj)
             cmer = self.__header['CRVAL1']
             srs.SetProjParm('central_meridian',cmer)
             #olat = self.__header['XXXXX']
             #srs.SetProjParm('latitude_of_origin',olat)
-            #scale = self.__header['XXXXX']
-            if scale is not None:
-                srs.SetProjParm('scale_factor',scale)
-            else: #set default of 1.0
-                srs.SetProjParm('scale_factor',1.0)
+            if olat is not None:
+                srs.SetProjParm('scale_factor',olat)
+            else: #set default of 0.0
+                srs.SetProjParm('scale_factor',0.0)
 
         elif ( wcsproj == 'SIN' ):
             gdalproj = 'Orthographic'
