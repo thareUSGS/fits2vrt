@@ -58,6 +58,8 @@ except:
 def Usage(theApp):
     print( '\nUsage: gdal2fits.py in.tif output.fits') # % theApp)
     print( '   optional: to print out image information also send -debug')
+    print( '   optional: to flip image (top/bottom) send -flip. ' \
+               +'Not correcting transformations values yet.')
     print( '   optional: to get lonsys=360, send -force360')
     print( '   optional: to computer min and maximum for FITS -computeMinMax')
     print( '   optional: to override the center Longitude, send -centerLon 180')
@@ -76,6 +78,7 @@ def EQUAL(a, b):
 def main( argv = None ):
 
     debug = False
+    flip = False
     inFilename = None
     inProjection = None
     bShowFileList = True
@@ -116,6 +119,8 @@ def main( argv = None ):
             return 0
         elif EQUAL(argv[i], "-debug"):
             debug = True
+        elif EQUAL(argv[i], "-flip"):
+            flip = True
         elif EQUAL(argv[i], "-computeMinMax"):
             bComputeMinMax = True
         elif EQUAL(argv[i], "-force360"):
@@ -155,8 +160,8 @@ def main( argv = None ):
 
     # check for output file. AstroPy can't overwrite
     if os.path.exists(dst_fits):
-        print("gdal2fits failed - delete file '%s' and rerun." % dst_fits )
-        sys.exit(1)
+        if debug:
+            print("warning: output file %s' will be deleted." % dst_fits )
        
 #/* -------------------------------------------------------------------- */
 #/*      Report general info.                                            */
@@ -381,6 +386,8 @@ def main( argv = None ):
 #/* - not writing. Writing a band/line at a time in Astropy seems tricky */
 #/* ==================================================================== */
     raster_data = inDataset.ReadAsArray()
+    if flip:
+        raster_data = np.flipud(raster_data)
 
 #   Grab band information from Band 1 - here assumes it works for all bands
 #   - for n bands, looping over all bands and getting metadata is shown below
@@ -581,9 +588,13 @@ def main( argv = None ):
         # tofits.header['CRPIX1'] = 0 #need to calc
         # tofits.header['CRPIX2'] = 0 #need to calc
 
-    if debug:
+    if debug and flip:
+        print( "writing flipped image (top/bottom)" )
+    elif debug:
         print 'writing FITS'
-    tofits.writeto(dst_fits)         
+  
+
+    tofits.writeto(dst_fits, clobber=True)         
 
     tofits = None
     raster_data = None
