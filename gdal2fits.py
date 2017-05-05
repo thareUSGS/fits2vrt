@@ -150,11 +150,14 @@ def main( argv = None ):
 #/* -------------------------------------------------------------------- */
     inDataset = gdal.Open( inFilename, gdal.GA_ReadOnly )
     if inDataset is None:
-        print("gdalinfo failed - unable to open '%s'." % inFilename )
+        print("gdal2fits failed - unable to open '%s'." % inFilename )
         sys.exit(1)
 
-    # Open the output file.
-
+    # check for output file. AstroPy can't overwrite
+    if os.path.exists(dst_fits):
+        print("gdal2fits failed - delete file '%s' and rerun." % dst_fits )
+        sys.exit(1)
+       
 #/* -------------------------------------------------------------------- */
 #/*      Report general info.                                            */
 #/* -------------------------------------------------------------------- */
@@ -372,199 +375,216 @@ def main( argv = None ):
         
 
 #/* ==================================================================== */
-#/*      Initialize output FITS header - don't add image bands yet       */
+#/* Initialize output FITS header using all bands loaded in numpy        */
+#/* - Warning: this may eat up all your memory for huge files.           */
+#/* - Alternative loop over bands or lines is below for reading but      */
+#/* - not writing. Writing a band/line at a time in Astropy seems tricky */
 #/* ==================================================================== */
-    #Test as simple text file
-    #tofits = open(dst_fits,'wt')
+    raster_data = inDataset.ReadAsArray()
 
-    #Create FITS using this information
-    # filename : dst_fits
-    # NAXIS1   : inDataset.RasterXSize
-    # NAXIS2   : inDataset.RasterYSize
-    # NAXIS3   : inDataset.RasterCount
-    # BITPIX   : fbittype
-    # ByteOrder  = MSB  - but need to write out this correctly
-    # BZERO section - allows for user to set
-    
-    #if base is None: 
-    #    BZERO   : iBand.GetOffset()
-    #else:
-    #    BZERO   : base
-    
-    # BSCALE section - allows for user to set
-    #if multiplier is None: 
-    #    BSCALE  : iBand.GetScale()
-    #else:
-    #    BSCALE  : multiplier
-    
-    # OBJECT   : target
-    # CTYPE1   : mapProjection
-    # A_RADIUS : semiMajor
-    # B_RADIUS : SemiMajor
-    # C_RADIUS : SemiMinor
-    
-    #Need to inverse these to get values (from fits2vrt.py)
-    #topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
-    #toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
+#   Grab band information from Band 1 - here assumes it works for all bands
+#   - for n bands, looping over all bands and getting metadata is shown below
+    iBand = inDataset.GetRasterBand(1)
+    (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
 
-    # CRPIX1   : UpperLeftCornerX (BUT calc to pixel space)
-    # CRPIX2   : UpperLeftCornerY (BUT calc to pixel space)
-    
-    
+    dfMin = iBand.GetMinimum()
+    dfMax = iBand.GetMaximum()
+    if dfMin is not None or dfMax is not None or bComputeMinMax:
+                line =  "  "
+                if dfMin is not None:
+                    line = line + ("Min=%.3f " % dfMin)
+                if dfMax is not None:
+                    line = line + ("Max=%.3f " % dfMax)
+
+                if bComputeMinMax:
+                    gdal.ErrorReset()
+                    adfCMinMax = iBand.ComputeRasterMinMax(False)
+                    dfMin = adfCMinMax[0]
+                    dfMax = adfCMinMax[1]
+                    if gdal.GetLastErrorType() == gdal.CE_None:
+                        line = line + ( "  Computed Min/Max=%.3f,%.3f" % ( \
+                                  dfMin, dfMax ))
+                if debug:
+                    print( line )
+
+    dfNoData = iBand.GetNoDataValue()
+    if dfNoData is not None:
+        if debug:
+            if dfNoData != dfNoData:
+                print( "  NoData Value=nan" )
+            else:
+                print( "  NoData Value=%.18g" % dfNoData )
+
+    if debug:               
+        if iBand.GetScale() != 1.0 or iBand.GetOffset() != 0.0:
+            print( "  Offset: %.15g,   Scale:%.15g" % \
+                     ( iBand.GetOffset(), iBand.GetScale()))
+
+    #get the datatype
+    if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
+        fbittype = -32
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
+        fbittype = -64
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT64"):
+        fbittype = 64
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT32"):
+        fbittype = 32
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT16"):
+        fbittype = 16
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "UINT16"):
+        fbittype = 16
+        bzero = -32768
+        bscale = 1
+    elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Byte"):
+        fbittype = 8
+    else:
+        print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
+        sys.exit(1)
+
+    if debug:
+        print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
+        print "FITS type: %s" % str(fbittype)
+
+    # this method can only output 1 band... Would rather init and
+    # then add bands one at a time...
+    tofits = fits.PrimaryHDU(raster_data)
+    tofits.header['BZERO'] = iBand.GetOffset()
+    tofits.header['BSCALE'] = iBand.GetScale()
+    tofits.header['OBJECT'] = target
+    tofits.header['CTYPE1'] = mapProjection
+    tofits.header['A_RADIUS'] = semiMajor
+    tofits.header['B_RADIUS'] = semiMajor
+    tofits.header['C_RADIUS'] = semiMinor
+    tofits.header['CRPIX1'] = UpperLeftCornerX #BUT calc to pixel space
+    tofits.header['CRPIX2'] = UpperLeftCornerY #BUT calc to pixel space
+            
     if ((centLon < 0) and force360):
        centLon = centLon + 360
     # CRVAL1   : centLon  # not sure this is correct
     # CRVAL2   : centLat  # not sure this is correct
     # CRPIX1   : need to calc
     # CRPIX2   : need to calc
-    
-    #####################################################
-    # Below this line, none of these are probably needed
-    # pixel size in degrees : mapres 
-    # MinimumLatitude : lry
-    # MaximumLatitude : uly
-
-    #push into 360 domain
-    if (force360):
-      if (ulx < 0):
-         ulx = ulx + 360
-      if (lrx < 0):
-         lrx = lrx + 360
-    # MinimumLongitude : urx)
-    # MaximumLongitude : lrx)
-
-    # UpperLeftCornerX in meters : UpperLeftCornerX
-    # UpperLeftCornerY in meters : UpperLeftCornerY
-    
-        
-#/* ==================================================================== */
-#/*      Loop over bands to write out                                    */
-#/* ==================================================================== */
-    bands = inDataset.RasterCount
-    for i in range(1, inDataset.RasterCount + 1):
-        iBand = inDataset.GetRasterBand(i)
-        (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
-        if debug:
-                print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( i, \
-                       nBlockXSize, nBlockYSize, \
-                       gdal.GetDataTypeName(iBand.DataType), \
-                       gdal.GetColorInterpretationName( \
-                       iBand.GetRasterColorInterpretation()) ))
-
-                if iBand.GetDescription() is not None \
-                                          and len(iBand.GetDescription()) > 0 :
-                    print( "  Description = %s" % iBand.GetDescription() )
-
-        dfMin = iBand.GetMinimum()
-        dfMax = iBand.GetMaximum()
-        if dfMin is not None or dfMax is not None or bComputeMinMax:
-                    line =  "  "
-                    if dfMin is not None:
-                        line = line + ("Min=%.3f " % dfMin)
-                    if dfMax is not None:
-                        line = line + ("Max=%.3f " % dfMax)
-
-                    if bComputeMinMax:
-                        gdal.ErrorReset()
-                        adfCMinMax = iBand.ComputeRasterMinMax(False)
-                        dfMin = adfCMinMax[0]
-                        dfMax = adfCMinMax[1]
-                        if gdal.GetLastErrorType() == gdal.CE_None:
-                            line = line + ( "  Computed Min/Max=%.3f,%.3f" % ( \
-                                      dfMin, dfMax ))
-                    if debug:
-                        print( line )
+    tofits.header['CRVAL1'] = centLon #not sure this is correct
+    tofits.header['CRVAL2'] = centLat #not sure this is correct
+    tofits.header['CRPIX1'] = 0 #need to calc
+    tofits.header['CRPIX2'] = 0 #need to calc
 
 
-        dfNoData = iBand.GetNoDataValue()
-        if dfNoData is not None:
-            if debug:
-                if dfNoData != dfNoData:
-                    print( "  NoData Value=nan" )
-                else:
-                    print( "  NoData Value=%.18g" % dfNoData )
+# Start block comment for read/write 1 band a time    
+# #/* ==================================================================== */
+# #/*      Loop over bands to write out                                    */
+# #/* ==================================================================== */
+    # bands = inDataset.RasterCount
+    # for i in range(1, inDataset.RasterCount + 1):
+        # iBand = inDataset.GetRasterBand(i)
+        # (nBlockXSize, nBlockYSize) = iBand.GetBlockSize()
+        # if debug:
+                # print( "Band %d Block=%dx%d Type=%s, ColorInterp=%s" % ( i, \
+                       # nBlockXSize, nBlockYSize, \
+                       # gdal.GetDataTypeName(iBand.DataType), \
+                       # gdal.GetColorInterpretationName( \
+                       # iBand.GetRasterColorInterpretation()) ))
+
+                # if iBand.GetDescription() is not None \
+                                          # and len(iBand.GetDescription()) > 0 :
+                    # print( "  Description = %s" % iBand.GetDescription() )
+
+        # dfMin = iBand.GetMinimum()
+        # dfMax = iBand.GetMaximum()
+        # if dfMin is not None or dfMax is not None or bComputeMinMax:
+                    # line =  "  "
+                    # if dfMin is not None:
+                        # line = line + ("Min=%.3f " % dfMin)
+                    # if dfMax is not None:
+                        # line = line + ("Max=%.3f " % dfMax)
+
+                    # if bComputeMinMax:
+                        # gdal.ErrorReset()
+                        # adfCMinMax = iBand.ComputeRasterMinMax(False)
+                        # dfMin = adfCMinMax[0]
+                        # dfMax = adfCMinMax[1]
+                        # if gdal.GetLastErrorType() == gdal.CE_None:
+                            # line = line + ( "  Computed Min/Max=%.3f,%.3f" % ( \
+                                      # dfMin, dfMax ))
+                    # if debug:
+                        # print( line )
 
 
-        if debug:               
-            if iBand.GetScale() != 1.0 or iBand.GetOffset() != 0.0:
-                print( "  Offset: %.15g,   Scale:%.15g" % \
-                         ( iBand.GetOffset(), iBand.GetScale()))
+        # dfNoData = iBand.GetNoDataValue()
+        # if dfNoData is not None:
+            # if debug:
+                # if dfNoData != dfNoData:
+                    # print( "  NoData Value=nan" )
+                # else:
+                    # print( "  NoData Value=%.18g" % dfNoData )
 
-        #Load band into numpy array for writing using Astropy
-        raster_data = iBand.ReadAsArray(0, 0, iBand.XSize, iBand.YSize)
 
-        #Note we are currently loading full band. This can be changed to per line
-        #for i in range(iBand.YSize):
-        #   scanLine = iBand.ReadAsArray(0, i, iBand.XSize, 1, iBand.XSize, 1)
+        # if debug:               
+            # if iBand.GetScale() != 1.0 or iBand.GetOffset() != 0.0:
+                # print( "  Offset: %.15g,   Scale:%.15g" % \
+                         # ( iBand.GetOffset(), iBand.GetScale()))
+
+        # #Load single band into numpy array for writing using Astropy
+        # raster_data = iBand.ReadAsArray(0, 0, iBand.XSize, iBand.YSize)
+
+        # #Note we are currently loading full band. This can be changed to per line
+        # #for i in range(iBand.YSize):
+        # #   scanLine = iBand.ReadAsArray(0, i, iBand.XSize, 1, iBand.XSize, 1)
 
    
-        #get the datatype
-        if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
-            fbittype = -32
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
-            fbittype = -64
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT64"):
-            fbittype = 64
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT32"):
-            fbittype = 32
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT16"):
-            fbittype = 16
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "UINT16"):
-            fbittype = 16
-            bzero = -32768
-            bscale = 1
-        elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Byte"):
-            fbittype = 8
-        else:
-            print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
-            sys.exit(1)
+        # #get the datatype
+        # if EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float32"):
+            # fbittype = -32
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Float64"):
+            # fbittype = -64
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT64"):
+            # fbittype = 64
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT32"):
+            # fbittype = 32
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "INT16"):
+            # fbittype = 16
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "UINT16"):
+            # fbittype = 16
+            # bzero = -32768
+            # bscale = 1
+        # elif EQUAL(gdal.GetDataTypeName(iBand.DataType), "Byte"):
+            # fbittype = 8
+        # else:
+            # print( "  %s: Not supported pixel type. Please convert to 8, 16 Int, or 32 Float" % gdal.GetDataTypeName(iBand.DataType))
+            # sys.exit(1)
 
-        if debug:
-            print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
-            print "FITS type: %s" % str(fbittype)
+        # if debug:
+            # print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
+            # print "FITS type: %s" % str(fbittype)
 
-        # this method can only output 1 band... Would rather init and
-        # then add bands one at a time...
-        tofits = fits.PrimaryHDU(raster_data)
-        tofits.header['BZERO'] = iBand.GetOffset()
-        tofits.header['BSCALE'] = iBand.GetScale()
-        tofits.header['OBJECT'] = target
-        tofits.header['CTYPE1'] = mapProjection
-        tofits.header['A_RADIUS'] = semiMajor
-        tofits.header['B_RADIUS'] = semiMajor
-        tofits.header['C_RADIUS'] = semiMinor
-        tofits.header['CRPIX1'] = UpperLeftCornerX #BUT calc to pixel space
-        tofits.header['CRPIX2'] = UpperLeftCornerY #BUT calc to pixel space
+        # # this method can only output 1 band... Would rather init and
+        # # then add bands one at a time...
+        # tofits = fits.PrimaryHDU(raster_data)
+        # tofits.header['BZERO'] = iBand.GetOffset()
+        # tofits.header['BSCALE'] = iBand.GetScale()
+        # tofits.header['OBJECT'] = target
+        # tofits.header['CTYPE1'] = mapProjection
+        # tofits.header['A_RADIUS'] = semiMajor
+        # tofits.header['B_RADIUS'] = semiMajor
+        # tofits.header['C_RADIUS'] = semiMinor
+        # tofits.header['CRPIX1'] = UpperLeftCornerX #BUT calc to pixel space
+        # tofits.header['CRPIX2'] = UpperLeftCornerY #BUT calc to pixel space
                 
-        if ((centLon < 0) and force360):
-           centLon = centLon + 360
-        # CRVAL1   : centLon  # not sure this is correct
-        # CRVAL2   : centLat  # not sure this is correct
-        # CRPIX1   : need to calc
-        # CRPIX2   : need to calc
-        tofits.header['CRVAL1'] = centLon #not sure this is correct
-        tofits.header['CRVAL2'] = centLat #not sure this is correct
-        tofits.header['CRPIX1'] = 0 #need to calc
-        tofits.header['CRPIX2'] = 0 #need to calc
+        # if ((centLon < 0) and force360):
+           # centLon = centLon + 360
+        # # CRVAL1   : centLon  # not sure this is correct
+        # # CRVAL2   : centLat  # not sure this is correct
+        # # CRPIX1   : need to calc
+        # # CRPIX2   : need to calc
+        # tofits.header['CRVAL1'] = centLon #not sure this is correct
+        # tofits.header['CRVAL2'] = centLat #not sure this is correct
+        # tofits.header['CRPIX1'] = 0 #need to calc
+        # tofits.header['CRPIX2'] = 0 #need to calc
 
-        if debug:
-            print 'writing FITS'
-        tofits.writeto(dst_fits)         
+    if debug:
+        print 'writing FITS'
+    tofits.writeto(dst_fits)         
 
-        #testing print per band
-        #tofits.write('band {} read\n'.format(i))
-        #test numpy, and how to Mask for stats using GDAL's nodata
-        #nodatamask = raster_data == dfNoData
-        #raster_data[nodatamask] = dfNoData
-        #or another way
-        #raster_data[raster_data == dfNoData] = np.nan
-        #tofits.write('band min : {}\n'.format(raster_data.min()))
-        #tofits.write('band max : {}\n'.format(raster_data.max()))
-        #tofits.write('band mean: {}\n'.format(raster_data.mean()))
-
-    #end read/write band loop
-    #tofits.write("complete\n")
-    #tofits.close()
     tofits = None
     raster_data = None
     iBand = None
