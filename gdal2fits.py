@@ -58,8 +58,8 @@ except:
 def Usage(theApp):
     print( '\nUsage: gdal2fits.py in.tif output.fits') # % theApp)
     print( '   optional: to print out image information also send -debug')
-    print( '   optional: to flip image (top/bottom) send -flip. ' \
-               +'Not correcting transformations values yet.')
+#    print( '   optional: to flip image (top/bottom) send -flip. ' \
+#               +'Not correcting transformations values yet.')
     print( '   optional: to get lonsys=360, send -force360')
     print( '   optional: to computer min and maximum for FITS -computeMinMax')
     print( '   optional: to override the center Longitude, send -centerLon 180')
@@ -385,10 +385,8 @@ def main( argv = None ):
 #/* - Alternative loop over bands or lines is below for reading but      */
 #/* - not writing. Writing a band/line at a time in Astropy seems tricky */
 #/* ==================================================================== */
-    raster_data = inDataset.ReadAsArray()
-    if flip:
-        raster_data = np.flipud(raster_data)
-
+    raster_data = inDataset.ReadAsArray
+        
 #   Grab band information from Band 1 - here assumes it works for all bands
 #   - for n bands, looping over all bands and getting metadata is shown below
     iBand = inDataset.GetRasterBand(1)
