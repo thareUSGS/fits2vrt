@@ -1,9 +1,10 @@
 """
 This file is part of fits2vrt
 A FITS to GDAL Virtual Header conversion tool
-25/04/2017
-Author : Chiara Marmo (chiara.marmo@u-psud.fr)
-Copyright : CNRS, Universite Paris-Sud
+17/08/2017
+Authors : Chiara Marmo (chiara.marmo@u-psud.fr)
+          Trent Hare (thare@usgs.gov)
+Copyright : CNRS, Universite Paris-Sud - USGS
 """
 
 import os
@@ -74,8 +75,8 @@ class fitskeys(object):
         if (fbittype == 8):
             gbittype = gdal.GDT_Byte
             nodata = 0
-            #pixeloffset needed for raw VRT type (points into FITS image)
-            pixeloffset = 1
+            #pxoffset needed for raw VRT type (points into FITS image)
+            pxoffset = 1
         elif (fbittype == 16):
             pxoffset = 2
             if (bzero <= 0):
@@ -109,7 +110,7 @@ class fitskeys(object):
         #dst_ds = driver.CreateCopy( vrtname + '.vrt', src_ds, 0)
 
         #lineoffset only needed for raw VRT type
-        lnoffset = dimy * pxoffset
+        lnoffset = dimx * pxoffset
         src_filename_opt = 'SourceFileName=' + self.__name
         im_offset_opt = 'ImageOffset=' + str(self.__offset)
         px_offset_opt = 'PixelOffset=' + str(pxoffset)
@@ -157,20 +158,16 @@ class fitskeys(object):
             geot4 = header['CD2_1'+altkey]
             geot5 = header['CD2_2'+altkey]
 
-            # Top Left pixel is startx endy in FITS
-            # leftx, lefty = self.__wcs.wcs_pix2world(0.5, 0.5+dimy, 1)
-            # toplefty = header['CRVAL2'+altkey] + geot5 * (0.5+dimy - header['CRPIX2'+altkey]) + geot4 * (0.5+dimy - header['CRPIX1'+altkey])
-
             # FITS rasters are still read upside-down by GIS software UpperLeftCorner is LowerLeftCorner for now
-            topleftx = header['CRVAL1'+altkey] + geot1 * (0.5 - header['CRPIX1'+altkey]) + geot2 * (0.5 - header['CRPIX2'+altkey])
-            toplefty = header['CRVAL2'+altkey] + geot5 * (0.5 - header['CRPIX2'+altkey]) + geot4 * (0.5 - header['CRPIX1'+altkey])
+            topleftx = header['CRVAL1'+altkey] + geot1 * ( - header['CRPIX1'+altkey]) + geot2 * ( - header['CRPIX2'+altkey])
+            toplefty = header['CRVAL2'+altkey] + geot5 * (1 - header['CRPIX2'+altkey]) + geot4 * (1 - header['CRPIX1'+altkey])
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
 
         # Defining projection type
         # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
         # and http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1077CFUL (FITS)
 
-        #Get radius values (maybe add an external method (e.g. string or URI)
+        # Get radius values (maybe add an external method (e.g. string or URI)
         # new FITS keywords A_RADIUS, C_RADIUS 
         # note B_RADIUS (to define a triaxial) not generally used for mapping applications
         semiMajor = header['A_RADIUS']
@@ -199,6 +196,7 @@ class fitskeys(object):
             clong = self.__header['CRVAL1']
             srs.SetProjParm('longitude_of_center',clong)
 
+        # Lambert Azimuthal Equal Area / ZEA projection
         elif ( wcsproj == 'ZEA' ):
             gdalproj = 'Lambert_Azimuthal_Equal_Area'
             srs.SetProjection(gdalproj)
@@ -207,6 +205,7 @@ class fitskeys(object):
             #clat = self.__header['XXXXX']
             #srs.SetProjParm('latitude_of_center',clat)
 
+        # Lambert Conformal Conic 1SP / COO projection
         elif ( wcsproj == 'COO' ):
             gdalproj = 'Lambert_Conformal_Conic_1SP'
             srs.SetProjection(gdalproj)
@@ -220,6 +219,7 @@ class fitskeys(object):
             else: #set default of 1.0
                 srs.SetProjParm('scale_factor',1.0)
 
+        # Equirectangular / CAR projection
         elif ( wcsproj == 'CAR' ):
             gdalproj = 'Equirectangular'
             srs.SetProjection(gdalproj)
@@ -237,6 +237,7 @@ class fitskeys(object):
 
 	#Here we are using Mercator not Transverse Mercator but
 	#There is a change FITS might be Hotine Merc or Trans Merc
+        # Mercator / MER projection
         elif ( wcsproj == 'MER' ):  
             gdalproj = 'Mercator'
             srs.SetProjection(gdalproj)
@@ -249,6 +250,7 @@ class fitskeys(object):
             else: #set default of 0.0
                 srs.SetProjParm('scale_factor',0.0)
 
+        # Orthographic / SIN projection
         elif ( wcsproj == 'SIN' ):
             gdalproj = 'Orthographic'
             srs.SetProjection(gdalproj)
@@ -257,25 +259,23 @@ class fitskeys(object):
             #olat = self.__header['XXXXX']
             #srs.SetProjParm('latitude_of_origin',olat)
 
+        # Point Perspective / AZP projection
         elif ( wcsproj == 'AZP' ):
             gdalproj = 'perspective_point_height'
             srs.SetProjection(gdalproj)
             # appears to need height... maybe center lon/lat
 
+        # Polar Stereographic / STG projection
         elif ( wcsproj == 'STG' ):
-            # todo need to get parameters
             gdalproj = 'Polar_Stereographic'
             srs.SetProjection(gdalproj)
             cmer = self.__header['CRVAL1']
             srs.SetProjParm('central_meridian',cmer)
-            #olat = self.__header['XXXXX']
-            #srs.SetProjParm('latitude_of_origin',olat)
+            olat = self.__header['CRVAL2']
+            srs.SetProjParm('latitude_of_origin',olat)
 
-            #hardwired for testing (MOLA)
-            srs.SetProjParm('latitude_of_origin',90)
         else:
             print "Unknown projection"
-            print wcsproj
             return 'fail'
 
         projname = gdalproj + '_' + target
