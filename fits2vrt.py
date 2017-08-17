@@ -94,6 +94,7 @@ class fitskeys(object):
         elif (fbittype == -32):
             pxoffset = 4
             gbittype = gdal.GDT_Float32
+            nodata = -3.40282e+38
         elif (fbittype == -64):
             pxoffset = 8
             gbittype = gdal.GDT_Float64
@@ -143,7 +144,12 @@ class fitskeys(object):
         dst_ds.SetMetadata( metadata )
 
         # Defining Target object
-        target = header['OBJECT'] 
+        try:
+            target = header['OBJECT'] 
+        except:
+            print "OBJECT keyword is missing"
+            target = 'Undefined'
+
 
         # Defining Geotransform: if linear WCS is defined 
         # GeoTransform[1] = CD1_1
@@ -151,7 +157,7 @@ class fitskeys(object):
         # GeoTransform[4] = CD2_1
         # GeoTransform[5] = CD2_2
         # GeoTransform[0] and GeoTransform[3] must be computed.
-        if self.__altkey:
+        try:
             altkey = self.__altkey
             geot1 = header['CD1_1'+altkey]
             geot2 = header['CD1_2'+altkey]
@@ -162,31 +168,37 @@ class fitskeys(object):
             topleftx = header['CRVAL1'+altkey] + geot1 * ( - header['CRPIX1'+altkey]) + geot2 * ( - header['CRPIX2'+altkey])
             toplefty = header['CRVAL2'+altkey] + geot5 * (1 - header['CRPIX2'+altkey]) + geot4 * (1 - header['CRPIX1'+altkey])
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
+        except:
+            print "WARNING! No linear keyword available, geotransformation matrix will not be calculated."
 
         # Defining projection type
         # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
         # and http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1077CFUL (FITS)
 
-        # Get radius values (maybe add an external method (e.g. string or URI)
-        # new FITS keywords A_RADIUS, C_RADIUS 
-        # note B_RADIUS (to define a triaxial) not generally used for mapping applications
-        semiMajor = header['A_RADIUS']
-        semiMinor = header['C_RADIUS']
-        if ((semiMajor - semiMinor) > 0.00001):
-            invFlattening= semiMajor / ( semiMajor - semiMinor)
-        else:
-            invFlattening= 0.0
-
         srs = osr.SpatialReference()
-        gcsName   = 'GCS_' + target
-        datumName = 'D_' + target
-        srsGeoCS  = 'GEOGCS["'+gcsName+'",DATUM["'+datumName+'",SPHEROID["'+ \
+        try:
+            # Get radius values (maybe add an external method (e.g. string or URI)
+            # new FITS keywords A_RADIUS, C_RADIUS 
+            # note B_RADIUS (to define a triaxial) not generally used for mapping applications
+            semiMajor = header['A_RADIUS']
+            semiMinor = header['C_RADIUS']
+            if ((semiMajor - semiMinor) > 0.00001):
+                invFlattening= semiMajor / ( semiMajor - semiMinor)
+            else:
+                invFlattening= 0.0
+
+            gcsName   = 'GCS_' + target
+            datumName = 'D_' + target
+            srsGeoCS  = 'GEOGCS["'+gcsName+'",DATUM["'+datumName+'",SPHEROID["'+ \
                         target+'",' + str(semiMajor) + ',' + str(invFlattening) + \
                         ']], PRIMEM["Reference_Meridian",0],' + \
                         'UNIT["degree",0.0174532925199433]]'
                    
-        #print srsGeoCS
-        srs.ImportFromWkt(srsGeoCS)
+            #print srsGeoCS
+            srs.ImportFromWkt(srsGeoCS)
+        except:
+            print "WARNING! No Radii keyword available, metadata will not contain DATUM information."
+            
 
         wcsproj = (self.__header['CTYPE1'])[-3:]
         # Sinusoidal / SFL projection
@@ -227,13 +239,12 @@ class fitskeys(object):
             srs.SetProjParm('central_meridian',cmer)
             # The standard_parallel_1 defines where the local radius is calculated
             # not the center of Y Cartesian system (which is latitude_of_origin)
-            #spar = self.__header['XXXXX']
-            #srs.SetProjParm('standard_parallel_1',spar)
-            #olat = self.__header['XXXXX']
-            if olat is not None:
-                srs.SetProjParm('latitude_of_origin',olat)
-            else: #set default of zero
-                srs.SetProjParm('latitude_of_origin',0)
+            # But FITS WCS only supports projections on the sphere
+            # we assume here that the local radius is the one computed at the projection center
+            spar = self.__header['CRVAL2']
+            srs.SetProjParm('standard_parallel_1',spar)
+            olat = self.__header['CRVAL2']
+            srs.SetProjParm('latitude_of_origin',olat)
 
 	#Here we are using Mercator not Transverse Mercator but
 	#There is a change FITS might be Hotine Merc or Trans Merc
