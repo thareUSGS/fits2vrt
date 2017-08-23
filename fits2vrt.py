@@ -156,7 +156,7 @@ class fitskeys(object):
         # GeoTransform[2] = CD1_2
         # GeoTransform[4] = CD2_1
         # GeoTransform[5] = CD2_2
-        # GeoTransform[0] and GeoTransform[3] must be computed.
+        # GeoTransform[0] and GeoTransform[3] (topleftx, toplefty) must be computed.
         try:
             altkey = self.__altkey
             geot1 = header['CD1_1'+altkey]
@@ -164,9 +164,10 @@ class fitskeys(object):
             geot4 = header['CD2_1'+altkey]
             geot5 = header['CD2_2'+altkey]
 
-            # FITS rasters are still read upside-down by GIS software UpperLeftCorner is LowerLeftCorner for now
-            topleftx = header['CRVAL1'+altkey] + geot1 * ( - header['CRPIX1'+altkey]) + geot2 * ( - header['CRPIX2'+altkey])
-            toplefty = header['CRVAL2'+altkey] + geot5 * (1 - header['CRPIX2'+altkey]) + geot4 * (1 - header['CRPIX1'+altkey])
+            # We are reading FITS rasters as raw matrix
+            # not sure yet on how to use non diagonal terms
+            topleftx = header['CRVAL1'+altkey] - geot1 * (header['CRPIX1'+altkey]-0.5) #+ geot2 * ( - header['CRPIX2'+altkey])
+            toplefty = header['CRVAL2'+altkey] - geot5 * (header['CRPIX2'+altkey]-0.5) #+ geot4 * (1 - header['CRPIX1'+altkey])
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
         except:
             print "WARNING! No linear keyword available, geotransformation matrix will not be calculated."
@@ -254,8 +255,8 @@ class fitskeys(object):
             srs.SetProjection(gdalproj)
             cmer = self.__header['CRVAL1']
             srs.SetProjParm('central_meridian',cmer)
-            #olat = self.__header['XXXXX']
-            #srs.SetProjParm('latitude_of_origin',olat)
+            olat = self.__header['CRVAL2']
+            srs.SetProjParm('latitude_of_origin',olat)
             if olat is not None:
                 srs.SetProjParm('scale_factor',olat)
             else: #set default of 0.0
