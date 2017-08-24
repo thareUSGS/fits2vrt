@@ -152,10 +152,10 @@ class fitskeys(object):
 
 
         # Defining Geotransform: if linear WCS is defined 
-        # GeoTransform[1] = CD1_1
-        # GeoTransform[2] = CD1_2
-        # GeoTransform[4] = CD2_1
-        # GeoTransform[5] = CD2_2
+        # GeoTransform[1] = CD1_1a
+        # GeoTransform[2] = CD1_2a
+        # GeoTransform[4] = CD2_1a
+        # GeoTransform[5] = CD2_2a
         # GeoTransform[0] and GeoTransform[3] (topleftx, toplefty) must be computed.
         try:
             altkey = self.__altkey
@@ -166,8 +166,8 @@ class fitskeys(object):
 
             # We are reading FITS rasters as raw matrix
             # not sure yet on how to use non diagonal terms
-            topleftx = header['CRVAL1'+altkey] - geot1 * (header['CRPIX1'+altkey]-0.5) #+ geot2 * ( - header['CRPIX2'+altkey])
-            toplefty = header['CRVAL2'+altkey] - geot5 * (header['CRPIX2'+altkey]-0.5) #+ geot4 * (1 - header['CRPIX1'+altkey])
+            topleftx = header['CRVAL1'+altkey] - geot1 * (header['CRPIX1'+altkey]-0.5) #- geot2 * (header['CRPIX2'+altkey]-0.5)
+            toplefty = header['CRVAL2'+altkey] - geot5 * (header['CRPIX2'+altkey]-0.5) #- geot4 * (header['CRPIX1'+altkey]-0.5)
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
         except:
             print "WARNING! No linear keyword available, geotransformation matrix will not be calculated."

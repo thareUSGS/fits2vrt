@@ -212,7 +212,8 @@ def main( argv = None ):
             target = hSRS.GetAttrValue("DATUM",0)
             target = target.replace("D_","").replace("_2000","").replace("GCS_","")
 
-            semiMajor = hSRS.GetSemiMajor() 
+            semiMajor = hSRS.GetSemiMajor()
+            cfactor = semiMajor * math.pi / 180.0 
             semiMinor = hSRS.GetSemiMinor()
             # if image is in degrees (deg/pix) then force meters (can be removed)
             if (inProjection[0:6] == "GEOGCS"):
@@ -311,18 +312,18 @@ def main( argv = None ):
         if (inProjection[0:6] == "GEOGCS"):
             #convert degrees/pixel to m/pixel 
              mapres = 1 / adfGeoTransform[1]
-             mres = adfGeoTransform[1] * (semiMajor * math.pi / 180.0)
+             mres = adfGeoTransform[1] * cfactor
         else:
             #convert m/pixel to pixel/degree
-             mapres = 1 / (adfGeoTransform[1] / (semiMajor * math.pi / 180.0))
+             mapres = 1 / (adfGeoTransform[1] / cfactor)
              mres = adfGeoTransform[1] 
 
         #from fits2vrt notes
         # Defining Geotransform: if linear WCS is defined 
-        # GeoTransform[1] = CD1_1
-        # GeoTransform[2] = CD1_2
-        # GeoTransform[4] = CD2_1
-        # GeoTransform[5] = CD2_2
+        # GeoTransform[1] = CD1_1a
+        # GeoTransform[2] = CD1_2a
+        # GeoTransform[4] = CD2_1a
+        # GeoTransform[5] = CD2_2a
         # GeoTransform[0] and GeoTransform[3] must be computed.
 
              
@@ -375,8 +376,8 @@ def main( argv = None ):
     #Needs more testing.                     
     if (inProjection[0:6] == "GEOGCS"):
         #note that: mres = adfGeoTransform[1] * (semiMajor * math.pi / 180.0)
-        UpperLeftCornerX = semiMajor * (ulx - centLon) * math.pi / 180.0
-        UpperLeftCornerY = semiMajor * uly * math.pi / 180.0
+        UpperLeftCornerX = (ulx - centLon) * cfactor
+        UpperLeftCornerY = uly * cfactor
         
 
 #/* ==================================================================== */
@@ -450,18 +451,77 @@ def main( argv = None ):
         print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
         print "FITS type: %s" % str(fbittype)
 
+    # CTYPE definition
+    if EQUAL(target, "MERCURY"):
+        ctype1 = 'MELN-'
+        ctype1a = 'MEPX-'
+        ctype2 = 'MELT-'
+        ctype2a = 'MEPY-'
+    elif EQUAL(target, "VENUS"):
+        ctype1 = 'VELN-'
+        ctype1a = 'VEPX-'
+        ctype2 = 'VELT-'
+        ctype2a = 'VEPY-'
+    elif EQUAL(target, "MARS"):
+        ctype1 = 'MALN-'
+        ctype1a = 'MAPX-'
+        ctype2 = 'MALT-'
+        ctype2a = 'MAPY-'
+    elif EQUAL(target, "JUPITER"):
+        ctype1 = 'JULN-'
+        ctype1a = 'JUPX-'
+        ctype2 = 'JULT-'
+        ctype2a = 'JUPY-'
+    elif EQUAL(target, "SATURN"):
+        ctype1 = 'SALN-'
+        ctype1a = 'SAPX-'
+        ctype2 = 'SALT-'
+        ctype2a = 'SAPY-'
+    elif EQUAL(target, "URANUS"):
+        ctype1 = 'URLN-'
+        ctype1a = 'URPX-'
+        ctype2 = 'URLT-'
+        ctype2a = 'URPY-'
+    elif EQUAL(target, "NEPTUNE"):
+        ctype1 = 'NELN-'
+        ctype1a = 'NEPX-'
+        ctype2 = 'NELT-'
+        ctype2a = 'NEPY-'
+    elif:
+        ctype1 = 'LN---'
+        ctype1a = 'PX---'
+        ctype2 = 'LT---'
+        ctype2a = 'PY---'
+
+    # Setting units (not mandatory)
+    cunit = 'deg    '
+    cunita = 'm       '
+
     # this method can only output 1 band... Would rather init and
     # then add bands one at a time...
     tofits = fits.PrimaryHDU(raster_data)
     tofits.header['BZERO'] = iBand.GetOffset()
     tofits.header['BSCALE'] = iBand.GetScale()
     tofits.header['OBJECT'] = target
-    tofits.header['CTYPE1'] = mapProjection
+    tofits.header['CUNIT1'] = cunit
+    tofits.header['CUNIT2'] = cunit
+    tofits.header['CUNIT1a'] = cunita
+    tofits.header['CUNIT2a'] = cunita
+    tofits.header['CTYPE1'] = ctype1 + mapProjection
+    tofits.header['CTYPE2'] = ctype2 + mapProjection
+    tofits.header['CTYPE1a'] = ctype1a + mapProjection
+    tofits.header['CTYPE2a'] = ctype2a + mapProjection
     tofits.header['A_RADIUS'] = semiMajor
     tofits.header['B_RADIUS'] = semiMajor
     tofits.header['C_RADIUS'] = semiMinor
-    tofits.header['CRPIX1'] = UpperLeftCornerX #BUT calc to pixel space
-    tofits.header['CRPIX2'] = UpperLeftCornerY #BUT calc to pixel space
+    tofits.header['CD1_1a']  = adfGeoTransform[1]
+    tofits.header['CD1_2a']  = adfGeoTransform[2]
+    tofits.header['CD2_1a']  = adfGeoTransform[4]
+    tofits.header['CD2_2a']  = adfGeoTransform[5]
+    tofits.header['CRVAL1a'] = UpperLeftCornerX # reference point in meters (alternate WCS)
+    tofits.header['CRVAL2a'] = UpperLeftCornerY # reference point in meters (alternate WCS) 
+    tofits.header['CRPIX1a'] = 0.5 # in FITS 1 is the center of the first pixel
+    tofits.header['CRPIX2a'] = inDataset.RasterYSize + 0.5 # Is the FITS flipped or not? TO CHECK
             
     if ((centLon < 0) and force360):
        centLon = centLon + 360
@@ -469,6 +529,10 @@ def main( argv = None ):
     # CRVAL2   : centLat  # not sure this is correct
     # CRPIX1   : need to calc
     # CRPIX2   : need to calc
+    tofits.header['CD1_1']  = adfGeoTransform[1] * cfactor
+    tofits.header['CD1_2']  = adfGeoTransform[2] * cfactor
+    tofits.header['CD2_1']  = adfGeoTransform[4] * cfactor
+    tofits.header['CD2_2']  = adfGeoTransform[5] * cfactor
     tofits.header['CRVAL1'] = centLon #not sure this is correct
     tofits.header['CRVAL2'] = centLat #not sure this is correct
     tofits.header['CRPIX1'] = 0 #need to calc
