@@ -37,12 +37,12 @@ import sys
 import math
 import os
 import os.path
-import re
-import numpy as np
+#import re
+#import numpy as np
 
-import astropy
+#import astropy
 from astropy.io import fits
-from astropy import wcs
+#from astropy import wcs
 
 try:
     from osgeo import gdal
@@ -361,8 +361,8 @@ def main( argv = None ):
                               inDataset.RasterYSize/2.0 );
 
     #Get bounds -- Do not need
-    #ulx = GDALGetLon( inDataset, hTransform, 0.0, 0.0 );
-    #uly = GDALGetLat( inDataset, hTransform, 0.0, 0.0 );
+    ulx = GDALGetLon( inDataset, hTransform, 0.0, 0.0 );
+    uly = GDALGetLat( inDataset, hTransform, 0.0, 0.0 );
     #lrx = GDALGetLon( inDataset, hTransform, inDataset.RasterXSize, \
     #                      inDataset.RasterYSize );
     #lry = GDALGetLat( inDataset, hTransform, inDataset.RasterXSize, \
@@ -448,8 +448,8 @@ def main( argv = None ):
         sys.exit(1)
 
     if debug:
-        print "GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType)
-        print "FITS type: %s" % str(fbittype)
+        print ("GDAL type: %s" % gdal.GetDataTypeName(iBand.DataType))
+        print ("FITS type: %s" % str(fbittype))
 
     # CTYPE definition
     if EQUAL(target, "MERCURY"):
@@ -487,11 +487,13 @@ def main( argv = None ):
         ctype1a = 'NEPX-'
         ctype2 = 'NELT-'
         ctype2a = 'NEPY-'
-    elif:
+    else:
+        print ("Warning: Target %s not supported" % (target))
         ctype1 = 'LN---'
         ctype1a = 'PX---'
         ctype2 = 'LT---'
         ctype2a = 'PY---'
+        #sys.exit(1)
 
     # Setting units (not mandatory)
     cunit = 'deg    '
@@ -653,9 +655,8 @@ def main( argv = None ):
     if debug and flip:
         print( "writing flipped image (top/bottom)" )
     elif debug:
-        print 'writing FITS'
+        print ("writing FITS")
   
-
     tofits.writeto(dst_fits, clobber=True)         
 
     tofits = None

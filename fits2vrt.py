@@ -10,10 +10,10 @@ Copyright : CNRS, Universite Paris-Sud - USGS
 import os
 import os.path
 import re
-import astropy
+#import astropy
 from astropy.io import fits
 from astropy import wcs
-import numpy as np
+#import numpy as np
 from osgeo import gdal
 from osgeo import osr
 
@@ -99,8 +99,8 @@ class fitskeys(object):
             pxoffset = 8
             gbittype = gdal.GDT_Float64
         else:
-            print "Bit Type not supported"
-            print fbittype
+            print ("Bit Type not supported")
+            print (fbittype)
             return 'fail' # need better error text or method
 
         # Addressing FITS as raw raster: this will work without CFITSIO GDAL dependence.
@@ -128,7 +128,7 @@ class fitskeys(object):
 
         result = dst_ds.AddBand( gbittype, options )
         if result != gdal.CE_None:
-            print 'AddBand() returned error code'
+            print ('AddBand() returned error code')
             return 'fail'
 
         # Setting all non mandatory FITS keywords as metadata
@@ -147,7 +147,7 @@ class fitskeys(object):
         try:
             target = header['OBJECT'] 
         except:
-            print "OBJECT keyword is missing"
+            print ("OBJECT keyword is missing")
             target = 'Undefined'
 
 
@@ -170,7 +170,7 @@ class fitskeys(object):
             toplefty = header['CRVAL2'+altkey] - geot5 * (header['CRPIX2'+altkey]-0.5) #- geot4 * (header['CRPIX1'+altkey]-0.5)
             dst_ds.SetGeoTransform( [ topleftx, geot1, geot2, toplefty, geot4, geot5] )
         except:
-            print "WARNING! No linear keyword available, geotransformation matrix will not be calculated."
+            print ("WARNING! No linear keyword available, geotransformation matrix will not be calculated.")
 
         # Defining projection type
         # Following http://www.gdal.org/ogr__srs__api_8h.html (GDAL)
@@ -198,7 +198,7 @@ class fitskeys(object):
             #print srsGeoCS
             srs.ImportFromWkt(srsGeoCS)
         except:
-            print "WARNING! No Radii keyword available, metadata will not contain DATUM information."
+            print ("WARNING! No Radii keyword available, metadata will not contain DATUM information.")
             
 
         wcsproj = (self.__header['CTYPE1'])[-3:]
@@ -287,7 +287,7 @@ class fitskeys(object):
             srs.SetProjParm('latitude_of_origin',olat)
 
         else:
-            print "Unknown projection"
+            print ("Unknown projection")
             return 'fail'
 
         projname = gdalproj + '_' + target
@@ -297,7 +297,7 @@ class fitskeys(object):
         srs.SetProjParm('false_northing',0.0)
 
         wkt = srs.ExportToWkt()
-        print 'projection:\n'+wkt
+        print ('projection:\n'+wkt)
         dst_ds.SetProjection(wkt)
 
         # Adding SimpleSource info
